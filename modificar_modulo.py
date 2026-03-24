@@ -359,10 +359,8 @@ def nombre_bloque_pilar(a, panel_grosor=""):
     except (ValueError, TypeError):
         return _fallback()
 
-def calc_correas(L, base_str, A=None):
+def calc_correas(L, base_str, A=None, g_carril=40):
     # Módulo mini AIS WC MINI (A<=1190): correa única centrada en L/2
-    # Cotas: 595 izq + 595 der = 1190mm
-    # tablero=1220 para que la cota de tablero use el valor estándar Hidrófugo
     if A is not None and int(A) <= 1190:
         return [round(int(L) / 2)], 1220
     t = (base_str or "").strip().upper()
@@ -372,6 +370,19 @@ def calc_correas(L, base_str, A=None):
     while x <= L - 5:
         posiciones.append(round(x))
         x += paso
+
+    # Nueva regla: última correa al punto medio de la última cota de tablero.
+    # Límites de la zona de cotas de tablero (relativos a x0):
+    x_ini = CARRIL_OFS_V_X + g_carril + 5   # = 85 para g_carril=40
+    x_fin = L - CARRIL_OFS_V_X - g_carril - 5
+    # Inicio de la última cota de tablero
+    xt = x_ini
+    while xt + tablero < x_fin:
+        xt += tablero
+    last_mid = round((xt + x_fin) / 2)
+    if posiciones:
+        posiciones[-1] = last_mid
+
     return posiciones, tablero
 
 def grosor_carril(panel_grosor):
@@ -874,6 +885,127 @@ def dibujar_textos_modulo(msp, x0, y0, x1, y1, base, acabado, serie):
 
 
 
+# ─── SECCIÓN DEL LADO ANCHO (a la derecha del módulo) ────────────────────────
+#
+# Grid de VARIACIONES SECCIÓN_LARGUERO_BASE:
+#   Filas (y_cell_bottom): L<=6000→2180.25, L<=7000→1253.25, L<=8500→327.25,
+#                           L>8500→-640.25, SANEAMIENTO→-1647.25
+#   Columnas (x_cell_left): g40→3715.34, g50→4125.46, g60→4536.58,
+#                            g80→4936.11, g100→5356.11
+#
+# Transformación TABLE→SECCIÓN (rot. 90°CW + 180°):
+#   profile_w = g_carril + 65   (ancho vertical del perfil en sección)
+#   Perfil inferior: sx = x1+DX_PROF+(hbase-ly),  sy = y0+(profile_w-lx)
+#   Perfil superior: sx = x1+DX_PROF+(hbase-ly),  sy = y1-(profile_w-lx)
+#   (lx,ly coordenadas relativas a la esquina inferior-izquierda de la celda)
+
+_VAR_ROW_Y = {
+    'L<=6000':    2180.25,
+    'L<=7000':    1253.25,
+    'L<=8500':     327.25,
+    'L>8500':     -640.25,
+    'SANEAMIENTO':-1647.25,
+}
+_VAR_COL_X = {40: 3715.34, 50: 4125.46, 60: 4536.58, 80: 4936.11, 100: 5356.11}
+
+def _perfil_seccion(doc, L, g_carril, base):
+    """Extrae vértices (lx,ly) del perfil correcto de VARIACIONES."""
+    bu = (base or '').upper().replace('Ó','O').replace('É','E').replace('Í','I')
+    if 'HORMIGON' in bu:
+        return None
+    if 'SANEAMIENTO' in bu: rk = 'SANEAMIENTO'
+    elif L <= 6000:          rk = 'L<=6000'
+    elif L <= 7000:          rk = 'L<=7000'
+    elif L <= 8500:          rk = 'L<=8500'
+    else:                    rk = 'L>8500'
+    y_cell = _VAR_ROW_Y[rk]
+    x_cell = _VAR_COL_X.get(g_carril, _VAR_COL_X[40])
+    blk = doc.blocks.get("VARIACIONES SECCIÓN_LARGUERO_BASE")
+    if not blk:
+        return None
+    for e in blk:
+        if e.dxftype() != 'LWPOLYLINE' or e.dxf.layer != 'PL-CER-DIB':
+            continue
+        pts = list(e.get_points(format='xyseb'))
+        if len(pts) < 4:
+            continue
+        cx = sum(p[0] for p in pts) / len(pts)
+        cy = sum(p[1] for p in pts) / len(pts)
+        if (x_cell - 10 < cx < x_cell + 220) and (y_cell - 10 < cy < y_cell + 220):
+            # Devolver coords relativas a (x_cell, y_cell)
+            return [(p[0] - x_cell, p[1] - y_cell) for p in pts], x_cell, y_cell
+    return None
+
+
+def dibujar_seccion_ancho(msp, doc, x0, y0, x1, y1, hbase, g_carril,
+                          tipo_tablero, L, base):
+    """
+    Sección del módulo por el lado ancho (A), a la derecha del módulo:
+    - Perfil inferior (y0) y superior (y1): desde VARIACIONES, rot. correcta
+    - Tablero (color 2 amarillo): 18mm fenólico / 19mm hidrófugo
+    - Correa (color 4 cian)
+    - BLOQUE TABLERO SECCIÓN con atributos dinámicos
+    """
+    if not isinstance(hbase, int):
+        return  # HORMIGONADA: pendiente
+
+    es_fen   = 'FENOL' in (tipo_tablero or '').upper().replace('Ó','O').replace('É','E').replace('Í','I')
+    grosor_t = 18 if es_fen else 19
+    tipo_txt = 'TABLERO'  if es_fen else 'AGLOMERADO'
+    tab_txt  = 'FENÓLICO' if es_fen else 'HIDRÓFUGO'
+    A        = float(y1 - y0)
+
+    DX_TAB   = 270.0             # tablero left desde x1
+    DX_PROF  = DX_TAB + grosor_t # perfil  left desde x1 (289 hid / 288 fen)
+    tab_ofs  = g_carril + 40     # offset Y tablero desde borde módulo (80 para g40)
+    cor_ofs  = tab_ofs + 2       # offset Y correa (82 para g40)
+    cor_w    = 99                # ancho rect correa (fijo siempre 99mm)
+    profile_w = g_carril + 65    # altura sección del perfil (105 para g40)
+
+    def _poly(pts_xy, layer, color=256):
+        msp.add_lwpolyline(pts_xy, close=True,
+                           dxfattribs={'layer': layer, 'color': color})
+
+    # ── Tablero (amarillo) ─────────────────────────────────────────────────────
+    _poly([(x1 + DX_TAB,            y0 + tab_ofs),
+           (x1 + DX_TAB + grosor_t, y0 + tab_ofs),
+           (x1 + DX_TAB + grosor_t, y1 - tab_ofs),
+           (x1 + DX_TAB,            y1 - tab_ofs)],
+          'Cotas', 2)
+
+    # ── Correa (cian) ──────────────────────────────────────────────────────────
+    _poly([(x1 + DX_PROF + 2,         y0 + cor_ofs),
+           (x1 + DX_PROF + 2 + cor_w, y0 + cor_ofs),
+           (x1 + DX_PROF + 2 + cor_w, y1 - cor_ofs),
+           (x1 + DX_PROF + 2,         y1 - cor_ofs)],
+          'CORREAS', 4)
+
+    # ── Perfiles desde VARIACIONES (rot. 90°CW + 180°) ────────────────────────
+    result = _perfil_seccion(doc, L, g_carril, base)
+    if result:
+        verts, x_cl, y_cl = result
+        # TABLE(lx,ly) → SECCIÓN con orientación correcta:
+        #   sx = x1 + DX_PROF + (hbase - ly)
+        #   Perfil inferior: sy = y0 + (profile_w - lx)
+        #   Perfil superior: sy = y1 - (profile_w - lx)
+        bot = [(x1 + DX_PROF + (hbase - ly), y0 + (profile_w - lx)) for lx, ly in verts]
+        top = [(x1 + DX_PROF + (hbase - ly), y1 - (profile_w - lx)) for lx, ly in verts]
+        _poly(bot, 'PL-CER-DIB')
+        _poly(top, 'PL-CER-DIB')
+
+    # ── BLOQUE TABLERO SECCIÓN ─────────────────────────────────────────────────
+    # insert = esquina inferior-izquierda del bloque (alto≈278mm)
+    # dx=456 desde x1, dy=1036 desde y0 (confirmado en DXF corregido)
+    ref = msp.add_blockref('BLOQUE TABLERO SECCIÓN',
+                           insert=(x1 + DX_PROF + hbase + 30, y0 + A / 2 - 139),
+                           dxfattribs={'layer': 'TEXTO'})
+    _attribs(ref, {
+        'TIPO_TABLERO':          tipo_txt,
+        'TABLERO':               tab_txt,
+        'NÚMERO_GROSOR_TABLERO': str(grosor_t),
+    }, doc)
+
+
 # ─── BLOQUES RECUADROS (nuevos en la plantilla corregida) ─────────────────────
 #
 # Bloques disponibles en la PLANTILLA.dxf:
@@ -1043,15 +1175,8 @@ def dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase, long_pilar, A,
                                dxfattribs={'layer': 'Cotas'})
         _attribs(ref, {'CARRIL': str(g_carril)}, doc)
 
-    # 6. CORTE CARRIL CARA LARGA: solo para módulos normales (no mini AIS WC)
-    if A > 1190:
-        msp.add_blockref('CORTE CARRIL CARA LARGA',
-                         insert=(x1 + 429.0, y0),
-                         dxfattribs={'layer': 'PL-CER-DIB', 'rotation': 0})
-        ref = msp.add_blockref('CORTE CARRIL CARA LARGA',
-                               insert=(x1 + 429.0, y1),
-                               dxfattribs={'layer': 'PL-CER-DIB', 'rotation': 180})
-        ref.dxf.xscale = -1.0
+    # 6. CORTE CARRIL CARA LARGA: eliminado — la sección del lado ancho
+    # se dibuja con dibujar_seccion_ancho() mediante polilíneas desde VARIACIONES
 
     # 7. RECUADRO TABLERO Y SUELO
     ref = msp.add_blockref('RECUADRO TABLERO Y SUELO',
@@ -1087,8 +1212,8 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
     # Ejemplos: H=2500 -> pilar=2525mm | H=2300 -> pilar=2325mm | H=3000 -> pilar=3025mm
     long_pilar = H + 25
     bloque_pil = nombre_bloque_pilar(A, panel)
-    correas, tablero = calc_correas(L, base, A)
     g_carril   = grosor_carril(panel)
+    correas, tablero = calc_correas(L, base, A, g_carril)
     col_est    = hex_a_ral(c("colorEstructura"))
     # Normalizar fecha a DD/MM/YYYY (con ceros)
     _fecha_raw = c("fecha") or datetime.date.today().strftime("%d/%m/%Y")
@@ -1247,9 +1372,6 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
     cont = msp.add_lwpolyline([(x0,y0),(x1,y0),(x1,y1),(x0,y1)], close=True,
                                dxfattribs={'layer':'PL-LIM-CASETA'})
 
-    # 3. Pilares
-    insertar_pilares(msp, x0, y0, x1, y1, bloque_pil)
-
     # 4. Correas (capa CORREAS, cian)
     for pos in correas:
         msp.add_line((x0+pos, y0), (x0+pos, y1), dxfattribs={'layer':'CORREAS', 'color':4})
@@ -1299,13 +1421,16 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
 
     hbase_draw = hbase if isinstance(hbase, int) else (140 if "140" in str(hbase) else 160)
     dibujar_alzado_base(msp, doc, x0, y0, x1, y1, hbase_draw, correas, tipo_tablero, long_pilar, A, g_carril)
-    # dibujar_zona_derecha: ELIMINADO - los detalles de sección carril a la derecha
-    # no forman parte del plano de estructura base estándar
+    dibujar_seccion_ancho(msp, doc, x0, y0, x1, y1, hbase_draw, g_carril,
+                          tipo_tablero, L, base)
     dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase_draw, long_pilar, A,
                               panel, g_carril, c("panelTipo"), c("serie"), c("suministro"),
                               tipo_tablero, c("acabado"))
 
-    # 9. Guardar
+    # 9. Pilares al final → quedan encima de todo (draw order por posición en fichero)
+    insertar_pilares(msp, x0, y0, x1, y1, bloque_pil)
+
+    # 10. Guardar
     doc.saveas(ruta_salida)
     print(f"  Guardado: {ruta_salida}")
 

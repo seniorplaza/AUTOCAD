@@ -34,7 +34,7 @@ def calc_hbase(l, a, base, panel):
     if t == "TRAMEX":      return 200
     if t == "SANEAMIENTO": return 240
     v = 137 if L <= 6000 else 160 if L <= 8500 else 200
-    if p > 50: v = max(v, 160)
+    if p > 60: v = max(v, 160)
     if A > 2500: v = max(v, 160)
     return v
 

@@ -5,6 +5,9 @@ from .config import (
     CARRIL_OFS_H_X, CARRIL_OFS_H_Y, CARRIL_OFS_V_X,
     CARRIL_OFS_V_Y_MAP, CARRIL_OFS_H_X_MAP, CARRIL_OFS_V_Y_MINI,
 )
+
+# Largo del tablero en dirección A (ancho del módulo)
+TABLERO_LARGO = {'Hidrófugo': 2440, 'Fenólico': 2500, 'Fibrocemento': 2600}
 from .dxf_utils import cota_v
 
 # ─── OFFSETS ALZADO BASE (relativos a y1 del módulo) ──────────────────────────
@@ -59,7 +62,10 @@ def dibujar_carriles(msp, x0, y0, x1, y1, grosor, ancho_modulo=2350):
 
 def _munon_pilar_str(A, long_pilar, panel_grosor=0):
     """Devuelve (texto_munon, texto_pilar) con dimensiones según ancho y panel."""
-    p = int(panel_grosor) if panel_grosor else 0
+    try:
+        p = int(panel_grosor) if panel_grosor else 0
+    except (ValueError, TypeError):
+        p = 0
     if   A <= 1190:  px, py = 125, 125
     elif p > 90:     px, py = 245, 217
     elif A <= 2350:  px, py = 195, 167
@@ -95,7 +101,7 @@ def dibujar_alzado_base(msp, doc, x0, y0, x1, y1, hbase, correas, tipo_tablero, 
                          insert=(x0 + pos, alz_cer_insert_y),
                          dxfattribs={'layer': 'ALZ-CER-DIB'})
 
-    cota_v(msp, doc, x0, alz_y0, x0, alz_y1, x0 + _COTA_HBASE_DX, 'PMP-T-75')
+    cota_v(msp, doc, x0, alz_y0, x0, alz_y1, x0 + _COTA_HBASE_DX, 'PMP-T-75', color=5)
 
 
 # ─── ZONA DERECHA (sección carril) ────────────────────────────────────────────
@@ -167,6 +173,42 @@ def dibujar_zona_derecha(msp, x0, y0, x1, y1, g_carril, A):
     _line((x1+289, y1-105), (x1+291, y1-105), 'Cotas')
     _line((x1+632, y0+204), (x1+797, y0+373), 'Cotas')
     _line((x1+874, y0+326), (x1+965, y0+568), 'Cotas')
+
+
+# ─── FLEJE FIBROCEMENTO ───────────────────────────────────────────────────────
+
+def dibujar_fleje(msp, doc, x0, y0, x1, y1, g_carril, tipo_tablero, x_cota):
+    """
+    Dibuja el fleje horizontal cuando A > largo del tablero.
+    Aplica a los 3 tipos: Hidrófugo (2440), Fenólico (2500), Fibrocemento (2600).
+    El tablero principal arranca desde arriba (y1); el fleje apoya su extremo inferior.
+    Posición: fleje_y = y1 - CARRIL_OFS_H_Y - g_carril - largo_tablero
+    Geometría:
+      1. LWPOLYLINE roja (color=1), const_width=100 → banda visible del fleje
+      2. LWPOLYLINE trazo-y-punto (TRAZOS2), color=1 → línea de eje centrada
+      3. Dos cota_v en x_cota: pieza inferior y tablero superior con tipo como sufijo
+    """
+    largo = TABLERO_LARGO.get(tipo_tablero, 2440)
+    fleje_y = y1 - CARRIL_OFS_H_Y - g_carril - largo
+    # Banda roja
+    _pl = msp.add_lwpolyline(
+        [(x0, fleje_y), (x1, fleje_y)],
+        dxfattribs={'layer': 'CORREAS', 'color': 1})
+    _pl.dxf.const_width = 100
+    # Línea de eje trazo-y-punto color RGB(189,142,0)
+    _dash = msp.add_lwpolyline(
+        [(x0, fleje_y), (x1, fleje_y)],
+        dxfattribs={'layer': 'CORREAS', 'linetype': 'TRAZOS2', 'ltscale': 10})
+    _dash.dxf.true_color = (189 << 16) | (142 << 8) | 0  # = 12422656
+    # Bordes interiores de los carriles horizontales
+    y_car_bot = y0 + CARRIL_OFS_H_Y + g_carril
+    y_car_top = y1 - CARRIL_OFS_H_Y - g_carril
+    # Cota tablero superior (fleje → carril_top) con tipo de tablero como sufijo
+    cota_v(msp, doc, x0, fleje_y,   x0, y_car_top, x_cota, 'PMP-T-60', suffix=tipo_tablero)
+    # Cota pieza inferior (carril_bot → fleje) sin sufijo
+    cota_v(msp, doc, x0, y_car_bot, x0, fleje_y,   x_cota, 'PMP-T-60')
+    pieza_inf = fleje_y - y_car_bot
+    print(f"  Fleje {tipo_tablero}: y={fleje_y:.1f}  tablero={largo}mm  pieza_inf={pieza_inf:.0f}mm")
 
 
 # ─── TEXTOS DENTRO DEL MÓDULO ─────────────────────────────────────────────────

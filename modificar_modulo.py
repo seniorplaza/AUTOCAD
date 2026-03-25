@@ -63,10 +63,10 @@ Col 0  fecha           | Col 1  oferta          | Col 2  numPedido
 Col 3  cliente         | Col 4  destino         | Col 5  serie
 Col 6  l (largo mm)    | Col 7  a (ancho mm)    | Col 8  h (alto mm)
 Col 9  estBase         | Col 10 estCubierta     | Col 11 estPilar
-Col 12 panelGrosor     | Col 13 panelTipo       | Col 14 base (tipo tablero)
-Col 15 acabado         | Col 16 suministro      | Col 17 perfilado
-Col 18 colorPanel      | Col 19 colorEstructura | Col 20 colorCarpinteria
-Col 21 extra (notas)
+Col 12 cubierta (PANEL/ESTÁNDAR)              | Col 13 panelGrosor     | Col 14 panelTipo
+Col 15 base (tipo tablero)                    | Col 16 acabado         | Col 17 suministro
+Col 18 perfilado       | Col 19 colorPanel      | Col 20 colorEstructura
+Col 21 colorCarpinteria | Col 22 extra (notas)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REGLAS IMPORTANTES

@@ -16,10 +16,15 @@ def cota_h(msp, doc, xa, ya, xb, yb, dim_y, dimstyle=DIMSTYLE, suffix=''):
     dim.render()
 
 
-def cota_v(msp, doc, xa, ya, xb, yb, dim_x, dimstyle=DIMSTYLE):
+def cota_v(msp, doc, xa, ya, xb, yb, dim_x, dimstyle=DIMSTYLE, color=None, suffix=''):
+    attribs = {'layer': 'Cotas'}
+    if color is not None:
+        attribs['color'] = color
     dim = msp.add_linear_dim(
         base=(dim_x, ya), p1=(xa, ya), p2=(xb, yb),
-        angle=90, dimstyle=dimstyle, dxfattribs={'layer':'Cotas'})
+        angle=90, dimstyle=dimstyle, dxfattribs=attribs)
+    if suffix:
+        dim.set_text(f'<> {suffix}')
     dim.render()
 
 

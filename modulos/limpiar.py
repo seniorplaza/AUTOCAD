@@ -12,7 +12,10 @@ from .config import ZONA_X, ZONA_Y
 # Capas que se borran independientemente de su posición
 _CAPAS_SIEMPRE = {
     'PL-LIM-CASETA', 'PL-PILARES', 'PL-PIL-DIB', 'CORREAS', 'CARRIL',
-    'ALZ-EST-BA-DIB', 'ALZ-CER-DIB', 'Ejes', 'SOMBRAS', 'PL-CER-DIB', 'CUADROS',
+    'ALZ-EST-BA-DIB', 'ALZ-CER-DIB', 'Ejes', 'SOMBRAS', 'CUADROS',
+    # PL-CER-DIB NO está aquí: las polilíneas de VARIACIONES (fuera de la zona)
+    # deben sobrevivir para que seccion_ancho.py las pueda leer.
+    # Las del módulo de ejemplo (dentro de ZONA_X/ZONA_Y) se borran por el filtro de zona.
 }
 
 

@@ -25,8 +25,10 @@ def calc_hbase(l, a, base, panel):
     HORMIGONADA devuelve string "UPN Xmm". Resto devuelve entero (mm).
     NOTA: panel exactamente 50mm usa carril e50 → NO sube a 160 (condición p > 50).
     """
-    try: L=int(l); A=int(a); p=int(panel) if panel else 0
+    try: L=int(l); A=int(a)
     except: return 137
+    try: p=int(panel) if panel else 0
+    except: p=0
     t = (base or "").strip().upper()
     if t == "HORMIGONADA": return "UPN 140" if L <= 7000 else "UPN 160"
     if t == "TRAMEX":      return 200
@@ -38,8 +40,10 @@ def calc_hbase(l, a, base, panel):
 
 
 def calc_hcubierta(l, a, base, panel, cubierta):
-    try: L=int(l); A=int(a); p=int(panel) if panel else 0
+    try: L=int(l); A=int(a)
     except: return 129
+    try: p=int(panel) if panel else 0
+    except: p=0
     tb = (base    or "").strip().upper()
     tc = (cubierta or "").strip().upper()
     if tc == "PANEL":       return 165
@@ -87,29 +91,45 @@ def grosor_carril(panel_grosor):
 def calc_correas(L, base_str, A=None, g_carril=40):
     """
     Posiciones X (relativas a x0) de cada correa y paso de tablero.
-    Regla última correa: siempre al punto medio de la última cota de tablero.
+    Por defecto los tableros arrancan desde la izquierda (x_ini).
+    Si el último tablero es demasiado estrecho (≤ tablero/2), se centra la distribución.
+    Cada tablero completo lleva 3 correas: borde izq, centro, borde der.
     """
     if A is not None and int(A) <= 1190:
         return [round(int(L) / 2)], 1220
     t = (base_str or "").strip().upper()
     t = t.replace("Ó","O").replace("É","E").replace("Í","I")
-    inicio, paso, tablero = (710,625,1250) if "FENOL" in t else (695,610,1220)
-    posiciones, x = [], inicio
-    while x <= L - 5:
-        posiciones.append(round(x))
-        x += paso
-    # Última correa: midpoint de la última cota de tablero,
-    # SALVO que esa cota sea muy estrecha (< tablero/2) → se queda en su inicio
+    paso, tablero = (625, 1250) if ("FENOL" in t or "FIBRO" in t) else (610, 1220)
+    L = int(L)
     x_ini = CARRIL_OFS_V_X + g_carril + 5
     x_fin = L - CARRIL_OFS_V_X - g_carril - 5
-    xt = x_ini
-    while xt + tablero < x_fin:
-        xt += tablero
-    last_cota_w = x_fin - xt
-    if last_cota_w >= tablero / 2:
-        last_pos = round((xt + x_fin) / 2)   # cota ancha → midpoint
+    span = x_fin - x_ini
+    n_full = int(span // tablero)
+    if n_full == 0:
+        return [round(L / 2)], tablero
+    partial = span - n_full * tablero
+
+    if partial <= tablero / 2:
+        # Partial demasiado estrecho → centrar
+        # Si el partial es muy pequeño, reducir n_full para que los lados sean decentes
+        if partial < tablero / 2:
+            n_full -= 1
+            partial = span - n_full * tablero
+        first = x_ini + partial / 2.0
+        posiciones = []
+        for i in range(n_full):
+            posiciones.append(round(first + i * tablero))           # borde izq
+            posiciones.append(round(first + i * tablero + paso))    # centro
+        posiciones.append(round(first + n_full * tablero))          # borde der del último
     else:
-        last_pos = round(xt)                  # cota estrecha → inicio de la cota
-    if posiciones:
-        posiciones[-1] = last_pos
-    return posiciones, tablero
+        # Partial grande → arranque desde la izquierda
+        posiciones = []
+        for i in range(n_full):
+            start = x_ini + i * tablero
+            posiciones.append(round(start + paso))                  # centro del tablero
+            posiciones.append(round(start + tablero))               # borde der
+        # Trozo parcial final: correa en su punto medio
+        last_start = x_ini + n_full * tablero
+        posiciones.append(round((last_start + x_fin) / 2))
+
+    return sorted(set(posiciones)), tablero

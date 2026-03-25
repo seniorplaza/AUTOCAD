@@ -58,20 +58,28 @@ def dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase, long_pilar, A,
 
     # 4-5. Bloques laterales (se omiten para módulo mini A<=1190)
     if A > 1190:
+        ud_x = max(x1+714.2, cx + 1900.0)
         ref = msp.add_blockref('RECUADRO NÚMERO DE UD (MÓDULOS) NUMERO SERIE',
-                               insert=(x1+714.2, y1+2671.6), dxfattribs={'layer': 'Cotas'})
+                               insert=(ud_x, y1+2952.2595), dxfattribs={'layer': 'Cotas'})
         _attribs(ref, {'4UNIDADES_1UNIDAD': uds_val}, doc)
 
         ref = msp.add_blockref('CARRIL PARA PANEL DE Xmm',
-                               insert=(x1+277.4, y1+370.5), dxfattribs={'layer': 'Cotas'})
+                               insert=(x1+479.9077, y1+372.5578), dxfattribs={'layer': 'Cotas'})
         _attribs(ref, {'CARRIL': str(g_carril)}, doc)
+        # Arco líder (amarillo discontinuo) desde el bloque hacia el carril
+        _arc = msp.add_arc(center=(x1+3202.4, y1-2906.7), radius=4262.1,
+                           start_angle=129.7, end_angle=140.1,
+                           dxfattribs={'layer': 'Cotas', 'color': 2, 'linetype': 'TRAZOS2', 'ltscale': 10})
+        _arc.transparency = 0.5
+
+    cy = (y0 + y1) / 2.0
 
     # 7. RECUADRO TABLERO Y SUELO
     ref = msp.add_blockref('RECUADRO TABLERO Y SUELO',
-                           insert=(cx, y1-1373.3), dxfattribs={'layer': 'TEXTO'})
+                           insert=(cx, cy - 198.3), dxfattribs={'layer': 'TEXTO'})
     _attribs(ref, {'TABLERO_SUELO': tablero_suelo_val}, doc)
 
     # 8. BLOQUE NÚMERO SERIE
     ref = msp.add_blockref('BLOQUE NÚMERO SERIE',
-                           insert=(cx, y1-949.4), dxfattribs={'layer': 'TEXTO'})
+                           insert=(cx, cy + 225.6), dxfattribs={'layer': 'TEXTO'})
     _attribs(ref, {'SERIE': serie or '-'}, doc)

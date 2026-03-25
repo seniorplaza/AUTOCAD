@@ -2645,7 +2645,7 @@
         }
 
         function exportToCSV() {
-            let csv = "\uFEFFFecha;Oferta;NumPedido;Cliente;Destino;Serie;L;A;H;EstBase;EstCubierta;EstPilar;PanelGrosor;PanelTipo;Base;Acabado;Suministro;Perfilado;ColorPanel;ColorEstructura;ColorCarpinteria;Notas;FolderPath;Impreso;Enviado;Entregado;TipoRegistro;Revision;RevHecha;NotasRev;FechasRev;Favorito;Carpeta\n";
+            let csv = "\uFEFFFecha;Oferta;NumPedido;Cliente;Destino;Serie;L;A;H;EstBase;EstCubierta;EstPilar;Cubierta;PanelGrosor;PanelTipo;Base;Acabado;Suministro;Perfilado;ColorPanel;ColorEstructura;ColorCarpinteria;Notas;FolderPath;Impreso;Enviado;Entregado;TipoRegistro;Revision;RevHecha;NotasRev;FechasRev;Favorito;Carpeta\n";
             orders.forEach(i => {
                 const folderVal = i.folder || "";
                 const favVal = i.favorite ? "true" : "false";
@@ -2664,7 +2664,7 @@
                 const estPilar = i.estPilar || "";
                 const folderPath = i.folderPath || "";
                 const numPedido = i.numPedido || "";
-                csv += `${i.fecha};${i.oferta};${numPedido};${i.cliente};${i.destino};${i.serie};${i.l};${i.a};${i.h};${estBase};${estCubierta};${estPilar};${panelGrosor};${panelTipo};${i.base || ""};${i.acabado || ""};${i.suministro || ""};${i.perfilado || ""};${i.colorPanel || ""};${i.colorEstructura || ""};${i.colorCarpinteria || ""};${i.extra};${folderPath};${printedVal};${sentVal};${deliveredVal};${tipoRegistroVal};${revisionVal};${revHechaVal};${notasRevVal};${fechasRevVal};${favVal};${folderVal}\n`;
+                csv += `${i.fecha};${i.oferta};${numPedido};${i.cliente};${i.destino};${i.serie};${i.l};${i.a};${i.h};${estBase};${estCubierta};${estPilar};${i.cubierta || ""};${panelGrosor};${panelTipo};${i.base || ""};${i.acabado || ""};${i.suministro || ""};${i.perfilado || ""};${i.colorPanel || ""};${i.colorEstructura || ""};${i.colorCarpinteria || ""};${i.extra};${folderPath};${printedVal};${sentVal};${deliveredVal};${tipoRegistroVal};${revisionVal};${revHechaVal};${notasRevVal};${fechasRevVal};${favVal};${folderVal}\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const a = document.createElement("a");
@@ -2684,56 +2684,57 @@
                 // Intentar parsear revHecha como JSON
                 let revHechaParsed = {};
                 try {
-                    if (parts[28]) revHechaParsed = JSON.parse(parts[28]);
+                    if (parts[29]) revHechaParsed = JSON.parse(parts[29]);
                 } catch(e) { revHechaParsed = {}; }
 
                 // Intentar parsear notasRev como JSON
                 let notasRevParsed = {};
                 try {
-                    if (parts[29]) notasRevParsed = JSON.parse(parts[29]);
+                    if (parts[30]) notasRevParsed = JSON.parse(parts[30]);
                 } catch(e) { notasRevParsed = {}; }
 
                 // Intentar parsear fechasRev como JSON
                 let fechasRevParsed = {};
                 try {
-                    if (parts[30]) fechasRevParsed = JSON.parse(parts[30]);
+                    if (parts[31]) fechasRevParsed = JSON.parse(parts[31]);
                 } catch(e) { fechasRevParsed = {}; }
 
-                return { 
-                    id: Date.now() + i, 
-                    fecha: parts[0] || "", 
-                    oferta: parts[1] || "", 
+                return {
+                    id: Date.now() + i,
+                    fecha: parts[0] || "",
+                    oferta: parts[1] || "",
                     numPedido: parts[2] || "",
-                    cliente: parts[3] || "", 
-                    destino: parts[4] || "", 
-                    serie: parts[5] || "", 
-                    l: parts[6] || "0", 
-                    a: parts[7] || "0", 
-                    h: parts[8] || "0", 
+                    cliente: parts[3] || "",
+                    destino: parts[4] || "",
+                    serie: parts[5] || "",
+                    l: parts[6] || "0",
+                    a: parts[7] || "0",
+                    h: parts[8] || "0",
                     estBase: parts[9] || "",
                     estCubierta: parts[10] || "",
                     estPilar: parts[11] || "",
-                    panelGrosor: parts[12] || "",
-                    panelTipo: parts[13] || "",
-                    base: parts[14] || "",
-                    acabado: parts[15] || "",
-                    suministro: parts[16] || "",
-                    perfilado: parts[17] || "",
-                    colorPanel: parts[18] || "",
-                    colorEstructura: parts[19] || "",
-                    colorCarpinteria: parts[20] || "",
-                    extra: parts[21] || "",
-                    folderPath: parts[22] || "",
-                    printed: parts[23] === "true" ? 2 : (isNaN(parseInt(parts[23])) ? 0 : parseInt(parts[23])),
-                    sent: parts[24] === "true" ? 2 : (isNaN(parseInt(parts[24])) ? 0 : parseInt(parts[24])),
-                    delivered: (parts[25] === "true"),
-                    tipoRegistro: isNaN(parseInt(parts[26])) ? 0 : parseInt(parts[26]),
-                    revision: isNaN(parseInt(parts[27])) ? 0 : parseInt(parts[27]),
+                    cubierta: parts[12] || "",
+                    panelGrosor: parts[13] || "",
+                    panelTipo: parts[14] || "",
+                    base: parts[15] || "",
+                    acabado: parts[16] || "",
+                    suministro: parts[17] || "",
+                    perfilado: parts[18] || "",
+                    colorPanel: parts[19] || "",
+                    colorEstructura: parts[20] || "",
+                    colorCarpinteria: parts[21] || "",
+                    extra: parts[22] || "",
+                    folderPath: parts[23] || "",
+                    printed: parts[24] === "true" ? 2 : (isNaN(parseInt(parts[24])) ? 0 : parseInt(parts[24])),
+                    sent: parts[25] === "true" ? 2 : (isNaN(parseInt(parts[25])) ? 0 : parseInt(parts[25])),
+                    delivered: (parts[26] === "true"),
+                    tipoRegistro: isNaN(parseInt(parts[27])) ? 0 : parseInt(parts[27]),
+                    revision: isNaN(parseInt(parts[28])) ? 0 : parseInt(parts[28]),
                     revHecha: revHechaParsed,
                     notasRev: notasRevParsed,
                     fechasRev: fechasRevParsed,
-                    favorite: (parts[31] === "true"),
-                    folder: (parts[32] && parts[32].trim() !== "") ? parts[32].trim() : null
+                    favorite: (parts[32] === "true"),
+                    folder: (parts[33] && parts[33].trim() !== "") ? parts[33].trim() : null
                 };
             });
 

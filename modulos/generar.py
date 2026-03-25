@@ -10,10 +10,10 @@ from .config      import COL, CARPETA_SALIDA
 from .calculos    import calc_hbase, calc_hcubierta, nombre_bloque_pilar, grosor_carril, calc_correas, hex_a_ral
 from .limpiar     import limpiar_modulo
 from .dxf_utils   import cota_h, cota_v, _attribs
-from .plano_base  import insertar_pilares, dibujar_carriles, dibujar_alzado_base
+from .plano_base  import insertar_pilares, dibujar_carriles, dibujar_alzado_base, dibujar_fleje
 from .seccion_ancho import dibujar_seccion_ancho
 from .bloques     import dibujar_bloques_recuadros
-from .config      import CARRIL_OFS_V_X
+from .config      import CARRIL_OFS_V_X, CARRIL_OFS_H_Y
 
 
 def generar_modulo(fila, ruta_plantilla, ruta_salida):
@@ -28,7 +28,7 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
     panel = c("panelGrosor")
 
     hbase      = calc_hbase(L, A, base, panel)
-    hcub       = calc_hcubierta(L, A, base, panel, c("estCubierta"))
+    hcub       = calc_hcubierta(L, A, base, panel, c("cubierta"))
     long_pilar = H + 25
     bloque_pil = nombre_bloque_pilar(A, panel)
     g_carril   = grosor_carril(panel)
@@ -180,7 +180,12 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
 
     # 7. Cotas
     _base_upper = (base or '').strip().upper().replace('Ó','O').replace('É','E').replace('Í','I')
-    tipo_tablero = 'Fenólico' if 'FENOL' in _base_upper else 'Hidrófugo'
+    if 'FIBRO' in _base_upper:
+        tipo_tablero = 'Fibrocemento'
+    elif 'FENOL' in _base_upper:
+        tipo_tablero = 'Fenólico'
+    else:
+        tipo_tablero = 'Hidrófugo'
 
     OFS_COR_BOT = 321;  OFS_TOT = 587;  OFS_TAB = 270;  OFS_IZQ = 321
 
@@ -193,17 +198,45 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
     if correas:
         x_tab_ini     = x0 + CARRIL_OFS_V_X + g_carril + 5
         x_tab_fin_max = x1 - CARRIL_OFS_V_X - g_carril - 5
-        x_tab = x_tab_ini
-        while x_tab < x_tab_fin_max:
-            fin = min(x_tab + tablero, x_tab_fin_max)
-            cota_h(msp, doc, x_tab, y1, fin, y1, y1+OFS_TAB, 'PMP-T-50', tipo_tablero)
-            x_tab += tablero
-
-    cota_v(msp, doc, x0, y0, x0, y1, x0-OFS_IZQ, 'PMP-T-60')
+        span = x_tab_fin_max - x_tab_ini
+        n_full = int(span // tablero)
+        if n_full > 0:
+            partial_tab = span - n_full * tablero
+            if partial_tab <= tablero / 2:
+                # Partial estrecho → centrar
+                if partial_tab < tablero / 2:
+                    n_full -= 1
+                    partial_tab = span - n_full * tablero
+                first = x_tab_ini + partial_tab / 2.0
+                if partial_tab / 2.0 > 1:
+                    cota_h(msp, doc, x_tab_ini, y1, first, y1, y1+OFS_TAB, 'PMP-T-50', tipo_tablero)
+                for i in range(n_full):
+                    cota_h(msp, doc, first + i*tablero, y1, first + (i+1)*tablero, y1, y1+OFS_TAB, 'PMP-T-50', tipo_tablero)
+                last = first + n_full * tablero
+                if x_tab_fin_max - last > 1:
+                    cota_h(msp, doc, last, y1, x_tab_fin_max, y1, y1+OFS_TAB, 'PMP-T-50', tipo_tablero)
+            else:
+                # Partial grande → izquierda
+                x_tab = x_tab_ini
+                while x_tab < x_tab_fin_max:
+                    fin = min(x_tab + tablero, x_tab_fin_max)
+                    cota_h(msp, doc, x_tab, y1, fin, y1, y1+OFS_TAB, 'PMP-T-50', tipo_tablero)
+                    x_tab += tablero
+        else:
+            cota_h(msp, doc, x_tab_ini, y1, x_tab_fin_max, y1, y1+OFS_TAB, 'PMP-T-50', tipo_tablero)
 
     # 8. Elementos alzado, sección y bloques
     hbase_draw = hbase if isinstance(hbase, int) else (140 if "140" in str(hbase) else 160)
     dibujar_alzado_base(msp, doc, x0, y0, x1, y1, hbase_draw, correas, tipo_tablero, long_pilar, A, g_carril)
+    from .plano_base import TABLERO_LARGO
+    largo_tab    = TABLERO_LARGO.get(tipo_tablero, 2440)
+    span_tablero = A - 2 * (CARRIL_OFS_H_Y + g_carril)
+    hay_fleje    = span_tablero > largo_tab
+    # Cota A: más a la izquierda si hay fleje (para dejar espacio a las sub-cotas)
+    ofs_cota_a = OFS_IZQ + 200 if hay_fleje else OFS_IZQ
+    cota_v(msp, doc, x0, y0, x0, y1, x0 - ofs_cota_a, 'PMP-T-60')
+    if hay_fleje:
+        dibujar_fleje(msp, doc, x0, y0, x1, y1, g_carril, tipo_tablero, x_cota=x0 - OFS_IZQ + 110)
     dibujar_seccion_ancho(msp, doc, x0, y0, x1, y1, hbase_draw, g_carril, tipo_tablero, L, base)
     dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase_draw, long_pilar, A,
                               panel, g_carril, c("panelTipo"), c("serie"), c("suministro"),

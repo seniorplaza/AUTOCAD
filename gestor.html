@@ -1667,6 +1667,7 @@
             { id: 'serie', label: 'N/S', type: 'number-text' },
             { id: 'cantidad', label: 'Ud.', type: 'number' },
             { id: 'modulo', label: 'Mód.', type: 'text' },
+            { id: 'conjunto', label: 'Adj.', type: 'special' },
             { id: 'l', label: 'L', type: 'number' },
             { id: 'a', label: 'A', type: 'number' },
             { id: 'h', label: 'H', type: 'number' },
@@ -1992,7 +1993,9 @@
                 if (migrated.numPedido === undefined) migrated.numPedido = '';
                 if (!migrated.modulo) migrated.modulo = 'M1';
                 if (!migrated.cantidad) migrated.cantidad = 1;
-                
+                if (migrated.conjunto === undefined) migrated.conjunto = false;
+                if (migrated.adosamiento === undefined) migrated.adosamiento = null;
+
                 return migrated;
             });
 
@@ -2035,7 +2038,7 @@
             const colWidths = {
                 fecha: 80, oferta: 90, numPedido: 70, cliente: 110, destino: 120,
                 _bracket: 14,
-                serie: 80, cantidad: 48, modulo: 52, l: 58, a: 58, h: 58,
+                serie: 80, cantidad: 48, modulo: 52, conjunto: 44, l: 58, a: 58, h: 58,
                 estructura: 110, cubierta: 80, correas: 100, panel: 72,
                 base: 68, acabado: 72, suministro: 80, perfilado: 72,
                 color: 110, extra: 100
@@ -2062,6 +2065,14 @@
 
                 if (col.id === '_bracket') {
                     th.style.cssText = 'width:14px;min-width:14px;max-width:14px;padding:0;';
+                    headerRow.appendChild(th);
+                    return;
+                }
+
+                if (col.id === 'conjunto') {
+                    th.className = "uppercase text-center";
+                    th.style.cssText = 'width:44px;min-width:44px;padding:4px 2px;font-size:10px;color:#64748b;';
+                    th.textContent = 'Adj.';
                     headerRow.appendChild(th);
                     return;
                 }
@@ -2423,6 +2434,9 @@
                     <td class="p-2 text-center" style="min-width:48px;">
                         <span onclick="cycleModulo(${item.id})" title="Clic para cambiar módulo" style="display:inline-block;padding:2px 7px;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:0.03em;${getModuloStyle(item.modulo)}">${item.modulo || 'M1'}</span>
                     </td>
+                    <td class="p-1 text-center" style="min-width:44px;vertical-align:middle;">
+                        <button onclick="toggleConjunto(${item.id})" title="${item.conjunto ? 'Módulo en CONJUNTO adosado — clic para cambiar a AISLADO' : 'Módulo AISLADO — clic para añadir a CONJUNTO adosado'}" style="display:inline-block;padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.04em;${item.conjunto ? 'background:rgba(20,184,166,0.2);border:1px solid rgba(20,184,166,0.6);color:#5eead4;' : 'background:rgba(71,85,105,0.2);border:1px solid #475569;color:#64748b;'}">${item.conjunto ? 'CONJ' : 'AIS'}</button>
+                    </td>
                     <td contenteditable="true" onblur="updateValue(${item.id}, 'l', this.innerText)" class="p-3 text-center text-emerald-400 font-bold mono-col separator-col">${item.l || '0'}</td>
                     <td contenteditable="true" onblur="updateValue(${item.id}, 'a', this.innerText)" class="p-3 text-center text-amber-400 font-bold mono-col separator-col">${item.a || '0'}</td>
                     <td contenteditable="true" onblur="updateValue(${item.id}, 'h', this.innerText)" class="p-3 text-center text-sky-400 font-bold mono-col">${item.h || '0'}</td>
@@ -2626,6 +2640,14 @@
                                 <button onclick="toggleTipoRegistro(${item.id})" class="action-btn transition-colors" title="${getTipoRegistroTitle(item.tipoRegistro || 0)}">
                                     <span class="material-symbols-outlined text-lg" style="color: ${getTipoRegistroColor(item.tipoRegistro || 0)}">${getTipoRegistroIcon(item.tipoRegistro || 0)}</span>
                                 </button>
+                                ${isFirstInGroup && groupItems.some(g => g.conjunto) ? (() => {
+                                    const hasLayout = groupItems.some(g => g.adosamiento);
+                                    const gk = groupKey.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                                    return `<div class="estado-separator"></div>
+                                <button onclick="openAdosamientoConfig('${gk}')" class="action-btn transition-colors" title="${hasLayout ? 'Editar layout de adosamiento' : 'Configurar adosamiento'}">
+                                    <span class="material-symbols-outlined text-lg" style="color:${hasLayout ? '#5eead4' : '#94a3b8'}">grid_view</span>
+                                </button>`;
+                                })() : ''}
                             </div>
                         </div>
                     </td>
@@ -2645,7 +2667,7 @@
         }
 
         function exportToCSV() {
-            let csv = "\uFEFFFecha;Oferta;NumPedido;Cliente;Destino;Serie;L;A;H;EstBase;EstCubierta;EstPilar;Cubierta;PanelGrosor;PanelTipo;Base;Acabado;Suministro;Perfilado;ColorPanel;ColorEstructura;ColorCarpinteria;Notas;FolderPath;Impreso;Enviado;Entregado;TipoRegistro;Revision;RevHecha;NotasRev;FechasRev;Favorito;Carpeta\n";
+            let csv = "\uFEFFFecha;Oferta;NumPedido;Cliente;Destino;Serie;L;A;H;EstBase;EstCubierta;EstPilar;Cubierta;PanelGrosor;PanelTipo;Base;Acabado;Suministro;Perfilado;ColorPanel;ColorEstructura;ColorCarpinteria;Notas;FolderPath;Impreso;Enviado;Entregado;TipoRegistro;Revision;RevHecha;NotasRev;FechasRev;Favorito;Carpeta;Modulo;Cantidad;Conjunto;Adosamiento\n";
             orders.forEach(i => {
                 const folderVal = i.folder || "";
                 const favVal = i.favorite ? "true" : "false";
@@ -2664,7 +2686,8 @@
                 const estPilar = i.estPilar || "";
                 const folderPath = i.folderPath || "";
                 const numPedido = i.numPedido || "";
-                csv += `${i.fecha};${i.oferta};${numPedido};${i.cliente};${i.destino};${i.serie};${i.l};${i.a};${i.h};${estBase};${estCubierta};${estPilar};${i.cubierta || ""};${panelGrosor};${panelTipo};${i.base || ""};${i.acabado || ""};${i.suministro || ""};${i.perfilado || ""};${i.colorPanel || ""};${i.colorEstructura || ""};${i.colorCarpinteria || ""};${i.extra};${folderPath};${printedVal};${sentVal};${deliveredVal};${tipoRegistroVal};${revisionVal};${revHechaVal};${notasRevVal};${fechasRevVal};${favVal};${folderVal}\n`;
+                const adosamientoVal = i.adosamiento ? JSON.stringify(i.adosamiento) : "";
+                csv += `${i.fecha};${i.oferta};${numPedido};${i.cliente};${i.destino};${i.serie};${i.l};${i.a};${i.h};${estBase};${estCubierta};${estPilar};${i.cubierta || ""};${panelGrosor};${panelTipo};${i.base || ""};${i.acabado || ""};${i.suministro || ""};${i.perfilado || ""};${i.colorPanel || ""};${i.colorEstructura || ""};${i.colorCarpinteria || ""};${i.extra};${folderPath};${printedVal};${sentVal};${deliveredVal};${tipoRegistroVal};${revisionVal};${revHechaVal};${notasRevVal};${fechasRevVal};${favVal};${folderVal};${i.modulo || "M1"};${i.cantidad || 1};${i.conjunto ? "true" : "false"};${adosamientoVal}\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const a = document.createElement("a");
@@ -2734,7 +2757,11 @@
                     notasRev: notasRevParsed,
                     fechasRev: fechasRevParsed,
                     favorite: (parts[32] === "true"),
-                    folder: (parts[33] && parts[33].trim() !== "") ? parts[33].trim() : null
+                    folder: (parts[33] && parts[33].trim() !== "") ? parts[33].trim() : null,
+                    modulo:   (parts[34] && parts[34].trim()) ? parts[34].trim() : 'M1',
+                    cantidad: isNaN(parseInt(parts[35])) ? 1 : parseInt(parts[35]),
+                    conjunto: (parts[36] === 'true'),
+                    adosamiento: (() => { try { return parts[37] && parts[37].trim() ? JSON.parse(parts[37]) : null; } catch(e) { return null; } })()
                 };
             });
 
@@ -3568,6 +3595,25 @@
             renderTable();
         }
 
+        function toggleConjunto(id) {
+            const index = orders.findIndex(o => o.id === id);
+            if (index === -1) return;
+            pushToHistory();
+            orders[index].conjunto = !orders[index].conjunto;
+            // Si pasa a AISLADO, borrar config de adosamiento del pedido
+            if (!orders[index].conjunto) {
+                const o = orders[index];
+                const siblings = orders.filter(s => s.oferta === o.oferta && s.numPedido === o.numPedido && s.cliente === o.cliente);
+                const anyGrp = siblings.some(s => s.id !== id && s.conjunto);
+                if (!anyGrp) {
+                    // Ninguno queda en GRP → borrar adosamiento de todos
+                    siblings.forEach(s => { s.adosamiento = null; });
+                }
+            }
+            saveList(false);
+            renderTable();
+        }
+
         function duplicateRow(id) {
             const source = orders.find(o => o.id === id);
             if (!source) return;
@@ -3649,7 +3695,7 @@
             // Determinar el tipoRegistro según el modo actual
             const tipoReg = modoActual === 'ofertas' ? 1 : 0;
             const newOrder = { 
-                id: Date.now(), fecha: new Date().toLocaleDateString('es-ES'), oferta: "OF ---/26", numPedido: "", cliente: "NUEVO", destino: "-", serie: "-", l: "0", a: "0", h: "0", estBase: "", estCubierta: "", estPilar: "", panelGrosor: "", panelTipo: "", cantidad: 1, modulo: "M1", cubierta: "", base: "", acabado: "", suministro: "", perfilado: "", colorPanel: "", colorEstructura: "", colorCarpinteria: "", extra: "", folderPath: "", printed: 0, sent: 0, delivered: 0, tipoRegistro: tipoReg, revision: 0, revHecha: {}, notasRev: {}, fechasRev: {}, favorite: false, folder: null 
+                id: Date.now(), fecha: new Date().toLocaleDateString('es-ES'), oferta: "OF ---/26", numPedido: "", cliente: "NUEVO", destino: "-", serie: "-", l: "0", a: "0", h: "0", estBase: "", estCubierta: "", estPilar: "", panelGrosor: "", panelTipo: "", cantidad: 1, modulo: "M1", conjunto: false, adosamiento: null, cubierta: "", base: "", acabado: "", suministro: "", perfilado: "", colorPanel: "", colorEstructura: "", colorCarpinteria: "", extra: "", folderPath: "", printed: 0, sent: 0, delivered: 0, tipoRegistro: tipoReg, revision: 0, revHecha: {}, notasRev: {}, fechasRev: {}, favorite: false, folder: null
             };
             pushToHistory(); orders.unshift(newOrder); saveList(false); renderTable();
         }
@@ -4631,7 +4677,374 @@
             loadTheme();
             loadData();
         };
+
+        // ═══ CONFIGURADOR DE ADOSAMIENTO ══════════════════════════════════════════
+        const ADO_GAP = 10;
+        const ADO_COLORS = {
+            'M1': { fill:'rgba(99,102,241,0.18)',  stroke:'rgba(99,102,241,0.75)',  text:'#a5b4fc' },
+            'M2': { fill:'rgba(16,185,129,0.18)',  stroke:'rgba(16,185,129,0.75)',  text:'#6ee7b7' },
+            'M3': { fill:'rgba(245,158,11,0.18)',  stroke:'rgba(245,158,11,0.75)',  text:'#fcd34d' },
+            'M4': { fill:'rgba(239,68,68,0.18)',   stroke:'rgba(239,68,68,0.75)',   text:'#fca5a5' },
+            'M5': { fill:'rgba(168,85,247,0.18)',  stroke:'rgba(168,85,247,0.75)',  text:'#d8b4fe' },
+            'M6': { fill:'rgba(251,146,60,0.18)',  stroke:'rgba(251,146,60,0.75)',  text:'#fed7aa' },
+        };
+
+        let adoState = {
+            groupKey:    null,
+            pool:        [],    // [{poolId, rowId, modulo, l, a}]
+            placed:      [],    // [{key, poolId, modulo, l, a, x, y}]
+            pending:     null,  // {targetKey, dir} — esperando selección de módulo
+            wallMap:     {},    // 'key1||key2' (sorted) → 'cerrado'|'abierto'
+            pendingWall: null,  // wid activo en el menú de pared
+        };
+
+        function openAdosamientoConfig(groupKey) {
+            const [oferta, numPedido, cliente] = groupKey.split('||');
+            const conjItems = orders.filter(o =>
+                (o.oferta||'') === oferta &&
+                (o.numPedido||'') === numPedido &&
+                (o.cliente||'') === cliente &&
+                o.conjunto
+            );
+            if (!conjItems.length) return;
+
+            adoState.groupKey = groupKey;
+
+            // Construir pool desde filas CONJ del pedido
+            adoState.pool = [];
+            conjItems.forEach(row => {
+                const qty = Math.max(1, parseInt(row.cantidad) || 1);
+                for (let i = 0; i < qty; i++) {
+                    adoState.pool.push({
+                        poolId: `${row.id}_${i}`,
+                        rowId: row.id,
+                        modulo: row.modulo || 'M1',
+                        l: parseInt(row.l) || 6000,
+                        a: parseInt(row.a) || 2350,
+                    });
+                }
+            });
+
+            // Cargar layout existente o iniciar con el primer módulo
+            const firstConj = conjItems[0];
+            if (firstConj.adosamiento && firstConj.adosamiento.placed && firstConj.adosamiento.placed.length) {
+                adoState.placed = JSON.parse(JSON.stringify(firstConj.adosamiento.placed));
+            } else {
+                const p = adoState.pool[0];
+                adoState.placed = [{ key:'k0', poolId:p.poolId, modulo:p.modulo, l:p.l, a:p.a, x:0, y:0 }];
+            }
+
+            adoState.pending = null;
+            document.getElementById('adoModal').style.display = 'flex';
+            setTimeout(adoRender, 30); // esperar a que el DOM esté pintado
+        }
+
+        function adoClose() {
+            document.getElementById('adoModal').style.display = 'none';
+            adoPickerClose();
+        }
+
+        function adoModalBackdrop(e) {
+            if (e.target === document.getElementById('adoModal')) adoClose();
+        }
+
+        function adoReset() {
+            const p = adoState.pool[0];
+            adoState.placed = [{ key:'k0', poolId:p.poolId, modulo:p.modulo, l:p.l, a:p.a, x:0, y:0 }];
+            adoPickerClose();
+            adoRender();
+        }
+
+        function adoUnplaced() {
+            const used = new Set(adoState.placed.map(p => p.poolId));
+            return adoState.pool.filter(p => !used.has(p.poolId));
+        }
+
+        function adoRender() {
+            const wrap = document.getElementById('adoCanvasWrap');
+            const svg  = document.getElementById('adoSvg');
+            const W = wrap.clientWidth  || 800;
+            const H = wrap.clientHeight || 400;
+            svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+            svg.setAttribute('width',  W);
+            svg.setAttribute('height', H);
+            // Limpiar todo excepto el picker
+            while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+            if (!adoState.placed.length) return;
+
+            // BBox en mm
+            let x0mm = Infinity, y0mm = Infinity, x1mm = -Infinity, y1mm = -Infinity;
+            adoState.placed.forEach(m => {
+                x0mm = Math.min(x0mm, m.x);        y0mm = Math.min(y0mm, m.y);
+                x1mm = Math.max(x1mm, m.x + m.l);  y1mm = Math.max(y1mm, m.y + m.a);
+            });
+
+            const PAD = 55;
+            const scale = Math.min(
+                (W - PAD*2) / Math.max(x1mm - x0mm, 1),
+                (H - PAD*2) / Math.max(y1mm - y0mm, 1),
+                0.12
+            );
+            const dx = PAD + ((W - PAD*2) - (x1mm - x0mm)*scale) / 2 - x0mm*scale;
+            const dy = PAD + ((H - PAD*2) - (y1mm - y0mm)*scale) / 2 - y0mm*scale;
+
+            // En SVG Y crece hacia abajo → invertimos respecto al eje mm
+            const svgX = mmX => dx + mmX * scale;
+            const svgY = mmY => H - (dy + mmY * scale);
+
+            const unplaced = adoUnplaced();
+            const canAdd = unplaced.length > 0;
+            const PR = 11; // radio botón (+)
+
+            adoState.placed.forEach(m => {
+                const sx = svgX(m.x),       sy = svgY(m.y + m.a);
+                const sw = m.l * scale,     sh = m.a * scale;
+                const col = ADO_COLORS[m.modulo] || ADO_COLORS['M1'];
+
+                const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+
+                // Rectángulo
+                const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+                Object.entries({ x:sx, y:sy, width:sw, height:sh,
+                    fill:col.fill, stroke:col.stroke, 'stroke-width':1.5, rx:4 })
+                    .forEach(([k,v]) => rect.setAttribute(k,v));
+                g.appendChild(rect);
+
+                const fs = Math.min(Math.max(sw*0.16, 9), 17);
+
+                // Etiqueta módulo
+                const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+                Object.entries({ x:sx+sw/2, y:sy+sh/2 - (sh>35?9:0),
+                    'text-anchor':'middle','dominant-baseline':'middle',
+                    fill:col.text,'font-size':fs,'font-weight':700,'font-family':'monospace' })
+                    .forEach(([k,v]) => lbl.setAttribute(k,v));
+                lbl.textContent = m.modulo;
+                g.appendChild(lbl);
+
+                // Dimensiones
+                if (sh > 30) {
+                    const dim = document.createElementNS('http://www.w3.org/2000/svg','text');
+                    Object.entries({ x:sx+sw/2, y:sy+sh/2+fs*0.7,
+                        'text-anchor':'middle','dominant-baseline':'middle',
+                        fill:'#64748b','font-size':Math.max(fs*0.65,8),'font-family':'monospace' })
+                        .forEach(([k,v]) => dim.setAttribute(k,v));
+                    dim.textContent = `${m.l}×${m.a}`;
+                    g.appendChild(dim);
+                }
+
+                // Botón eliminar (×) — solo si hay más de 1 módulo
+                if (adoState.placed.length > 1) {
+                    const rg = document.createElementNS('http://www.w3.org/2000/svg','g');
+                    rg.style.cursor = 'pointer';
+                    rg.addEventListener('click', e => { e.stopPropagation(); adoRemoveModule(m.key); });
+                    const rc = document.createElementNS('http://www.w3.org/2000/svg','circle');
+                    Object.entries({ cx:sx+sw-9, cy:sy+9, r:8,
+                        fill:'rgba(239,68,68,0.25)', stroke:'rgba(239,68,68,0.6)','stroke-width':1 })
+                        .forEach(([k,v]) => rc.setAttribute(k,v));
+                    const rt = document.createElementNS('http://www.w3.org/2000/svg','text');
+                    Object.entries({ x:sx+sw-9, y:sy+9, 'text-anchor':'middle',
+                        'dominant-baseline':'middle', fill:'#fca5a5','font-size':12,'font-weight':700 })
+                        .forEach(([k,v]) => rt.setAttribute(k,v));
+                    rt.textContent = '×';
+                    rg.appendChild(rc); rg.appendChild(rt);
+                    g.appendChild(rg);
+                }
+
+                // Botones (+) en los 4 lados
+                if (canAdd) {
+                    [
+                        { dir:'E', cx:sx+sw+PR+3, cy:sy+sh/2 },
+                        { dir:'W', cx:sx-PR-3,    cy:sy+sh/2 },
+                        { dir:'N', cx:sx+sw/2,    cy:sy-PR-3 },
+                        { dir:'S', cx:sx+sw/2,    cy:sy+sh+PR+3 },
+                    ].forEach(({ dir, cx, cy }) => {
+                        const pg = document.createElementNS('http://www.w3.org/2000/svg','g');
+                        pg.style.cursor = 'pointer';
+                        pg.addEventListener('click', e => {
+                            e.stopPropagation();
+                            adoShowPicker(m.key, dir, cx, cy);
+                        });
+                        const pc = document.createElementNS('http://www.w3.org/2000/svg','circle');
+                        Object.entries({ cx, cy, r:PR,
+                            fill:'rgba(20,184,166,0.18)', stroke:'rgba(20,184,166,0.65)','stroke-width':1.5 })
+                            .forEach(([k,v]) => pc.setAttribute(k,v));
+                        const pt = document.createElementNS('http://www.w3.org/2000/svg','text');
+                        Object.entries({ x:cx, y:cy, 'text-anchor':'middle',
+                            'dominant-baseline':'middle', fill:'#5eead4','font-size':16,'font-weight':700 })
+                            .forEach(([k,v]) => pt.setAttribute(k,v));
+                        pt.textContent = '+';
+                        pg.appendChild(pc); pg.appendChild(pt);
+                        g.appendChild(pg);
+                    });
+                }
+
+                svg.appendChild(g);
+            });
+
+            // ── Leyenda y subtítulo ──
+            document.getElementById('adoSubtitle').textContent =
+                `${adoState.placed.length} / ${adoState.pool.length} módulos colocados`;
+
+            const typeTot = {}, typePlaced = {};
+            adoState.pool.forEach(p => { typeTot[p.modulo] = (typeTot[p.modulo]||0)+1; });
+            adoState.placed.forEach(p => { typePlaced[p.modulo] = (typePlaced[p.modulo]||0)+1; });
+
+            document.getElementById('adoLegend').innerHTML =
+                Object.entries(typeTot).map(([mod, tot]) => {
+                    const done = typePlaced[mod] || 0;
+                    const c = ADO_COLORS[mod] || ADO_COLORS['M1'];
+                    return `<span style="display:inline-flex;align-items:center;gap:4px;">
+                        <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c.fill};border:1px solid ${c.stroke};"></span>
+                        <span style="color:${c.text};font-weight:700;">${mod}</span>
+                        <span style="color:#475569;">${done}/${tot}</span>
+                    </span>`;
+                }).join('<span style="color:#1e293b;margin:0 6px;">│</span>') +
+                (unplaced.length === 0
+                    ? '<span style="margin-left:10px;color:#5eead4;font-weight:600;">✓ Todos colocados</span>'
+                    : `<span style="margin-left:10px;color:#f59e0b;">${unplaced.length} sin colocar</span>`);
+        }
+
+        function adoShowPicker(targetKey, dir, svgCx, svgCy) {
+            adoState.pending = { targetKey, dir };
+            const unplaced = adoUnplaced();
+
+            // Agrupar por tipo de módulo
+            const byType = {};
+            unplaced.forEach(p => { (byType[p.modulo] = byType[p.modulo]||[]).push(p); });
+
+            document.getElementById('adoPickerList').innerHTML =
+                Object.entries(byType).map(([mod, slots]) => {
+                    const p = slots[0];
+                    const c = ADO_COLORS[mod] || ADO_COLORS['M1'];
+                    return `<button onclick="adoPickModule('${p.poolId}')"
+                        style="display:block;width:100%;text-align:left;background:rgba(71,85,105,0.25);
+                               border:1px solid #334155;border-radius:5px;padding:6px 10px;margin-bottom:5px;
+                               cursor:pointer;color:#e2e8f0;font-size:12px;font-family:monospace;"
+                        onmouseover="this.style.background='rgba(20,184,166,0.15)';this.style.borderColor='rgba(20,184,166,0.5)'"
+                        onmouseout="this.style.background='rgba(71,85,105,0.25)';this.style.borderColor='#334155'">
+                        <span style="font-weight:700;color:${c.text}">${mod}</span>
+                        <span style="color:#64748b;"> ${p.l}×${p.a}</span>
+                        <span style="float:right;color:#475569;font-size:11px;">×${slots.length}</span>
+                    </button>`;
+                }).join('');
+
+            // Posicionar el picker cerca del botón (+) en coordenadas SVG→px
+            const wrap = document.getElementById('adoCanvasWrap');
+            const svg  = document.getElementById('adoSvg');
+            const vb   = svg.getAttribute('viewBox').split(' ').map(Number);
+            const sr   = svg.getBoundingClientRect();
+            const wr   = wrap.getBoundingClientRect();
+            const px   = (svgCx / vb[2]) * sr.width  + (sr.left - wr.left);
+            const py   = (svgCy / vb[3]) * sr.height + (sr.top  - wr.top);
+
+            const picker = document.getElementById('adoPicker');
+            picker.style.display = 'block';
+            picker.style.left = Math.min(px + 16, wrap.clientWidth - 200) + 'px';
+            picker.style.top  = Math.max(py - 30, 5) + 'px';
+        }
+
+        function adoPickerClose() {
+            document.getElementById('adoPicker').style.display = 'none';
+            adoState.pending = null;
+        }
+
+        function adoPickModule(poolId) {
+            if (!adoState.pending) return;
+            const { targetKey, dir } = adoState.pending;
+            const target = adoState.placed.find(p => p.key === targetKey);
+            const slot   = adoState.pool.find(p => p.poolId === poolId);
+            if (!target || !slot) return;
+
+            let nx, ny;
+            switch (dir) {
+                case 'E': nx = target.x + target.l + ADO_GAP; ny = target.y; break;
+                case 'W': nx = target.x - slot.l - ADO_GAP;  ny = target.y; break;
+                case 'N': nx = target.x; ny = target.y + target.a + ADO_GAP; break;
+                case 'S': nx = target.x; ny = target.y - slot.a - ADO_GAP;  break;
+            }
+
+            adoState.placed.push({
+                key: 'k_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+                poolId: slot.poolId,
+                modulo: slot.modulo,
+                l: slot.l,
+                a: slot.a,
+                x: nx, y: ny,
+            });
+            adoPickerClose();
+            adoRender();
+        }
+
+        function adoRemoveModule(key) {
+            if (adoState.placed.length <= 1) return;
+            adoState.placed = adoState.placed.filter(p => p.key !== key);
+            adoPickerClose();
+            adoRender();
+        }
+
+        function adoSave() {
+            const [oferta, numPedido, cliente] = adoState.groupKey.split('||');
+            const firstConj = orders.find(o =>
+                (o.oferta||'') === oferta &&
+                (o.numPedido||'') === numPedido &&
+                (o.cliente||'') === cliente &&
+                o.conjunto
+            );
+            if (!firstConj) { adoClose(); return; }
+
+            pushToHistory();
+
+            // Normalizar: desplazar para que minX=0, minY=0
+            const minX = Math.min(...adoState.placed.map(p => p.x));
+            const minY = Math.min(...adoState.placed.map(p => p.y));
+            firstConj.adosamiento = {
+                placed: adoState.placed.map(p => ({ ...p, x: p.x - minX, y: p.y - minY }))
+            };
+
+            saveList(false);
+            adoClose();
+            renderTable();
+        }
+        // ════════════════════════════════════════════════════════════════════════════
+
     </script>
+
+<!-- ═══ MODAL CONFIGURADOR DE ADOSAMIENTO ═══════════════════════════════════ -->
+<div id="adoModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;" onclick="adoModalBackdrop(event)">
+    <div style="background:#0f172a;border:1px solid #334155;border-radius:12px;width:92vw;max-width:950px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.6);">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #1e293b;flex-shrink:0;">
+            <div>
+                <div style="font-size:13px;font-weight:700;color:#e2e8f0;letter-spacing:0.07em;text-transform:uppercase;">Configuración de Adosamiento</div>
+                <div id="adoSubtitle" style="font-size:11px;color:#64748b;margin-top:2px;"></div>
+            </div>
+            <button onclick="adoClose()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:22px;line-height:1;padding:2px 6px;" title="Cerrar">✕</button>
+        </div>
+        <!-- Canvas -->
+        <div style="flex:1;overflow:hidden;padding:12px;min-height:0;">
+            <div id="adoCanvasWrap" style="width:100%;height:100%;min-height:340px;background:#080f1e;border-radius:8px;border:1px solid #1e293b;position:relative;overflow:hidden;">
+                <svg id="adoSvg" style="display:block;width:100%;height:100%;" xmlns="http://www.w3.org/2000/svg"></svg>
+                <!-- Picker popup -->
+                <div id="adoPicker" style="display:none;position:absolute;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px;z-index:20;min-width:190px;box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+                    <div style="font-size:10px;color:#64748b;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.06em;">Seleccionar módulo</div>
+                    <div id="adoPickerList"></div>
+                    <button onclick="adoPickerClose()" style="margin-top:6px;width:100%;background:transparent;border:1px solid #334155;border-radius:4px;color:#64748b;font-size:11px;padding:4px;cursor:pointer;">Cancelar</button>
+                </div>
+            </div>
+        </div>
+        <!-- Leyenda -->
+        <div id="adoLegend" style="padding:7px 20px;border-top:1px solid #1e293b;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:#64748b;flex-shrink:0;min-height:34px;"></div>
+        <!-- Footer -->
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid #1e293b;flex-shrink:0;">
+            <button onclick="adoReset()" style="background:transparent;border:1px solid #334155;border-radius:6px;color:#64748b;font-size:12px;font-weight:600;padding:7px 14px;cursor:pointer;">Reiniciar</button>
+            <div style="display:flex;gap:8px;">
+                <button onclick="adoClose()" style="background:transparent;border:1px solid #475569;border-radius:6px;color:#94a3b8;font-size:12px;font-weight:600;padding:7px 16px;cursor:pointer;">Cancelar</button>
+                <button onclick="adoSave()" style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.55);border-radius:6px;color:#5eead4;font-size:12px;font-weight:700;padding:7px 22px;cursor:pointer;">Aceptar</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

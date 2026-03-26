@@ -104,8 +104,11 @@ except ImportError:
     os.system("pip install ezdxf --break-system-packages -q")
     import ezdxf  # noqa: F401
 
-from modulos.config  import PLANTILLA_DXF, CARPETA_SALIDA, COL
-from modulos.generar import generar_modulo
+import json as _json
+
+from modulos.config   import PLANTILLA_DXF, CARPETA_SALIDA, COL
+from modulos.generar  import generar_modulo
+from modulos.adosado  import generar_adosado
 
 
 # ─── LECTURA CSV ──────────────────────────────────────────────────────────────
@@ -209,19 +212,56 @@ def main():
     else:
         pedidos = mostrar_menu(grupos)
 
-    conteo     = Counter(_c(f, 'numPedido') for f in pedidos)
-    contadores = {}
+    # Agrupar por numPedido manteniendo orden
+    grupos_np = OrderedDict()
     for fila in pedidos:
-        np   = _c(fila, 'numPedido')
-        base = f"{np}-{_c(fila,'destino')}".replace("/","-").replace(" ","_")
-        if conteo[np] > 1:
-            contadores[np] = contadores.get(np, 0) + 1
-            nombre = f"{base}-M{contadores[np]}"
-        else:
-            nombre = base
-        ruta_sal = os.path.join(CARPETA_SALIDA, f"{nombre}.dxf")
-        print(f"\nGenerando: {nombre}")
-        generar_modulo(fila, PLANTILLA_DXF, ruta_sal)
+        grupos_np.setdefault(_c(fila,'numPedido'), []).append(fila)
+
+    for np, filas_np in grupos_np.items():
+        destino0    = _c(filas_np[0], 'destino')
+        base_nombre = f"{np}-{destino0}".replace("/","-").replace(" ","_")
+
+        # Separar filas CONJ y AISLADO
+        filas_conj = [f for f in filas_np if _c(f,'conjunto').strip().lower() == 'true']
+        filas_ais  = [f for f in filas_np if _c(f,'conjunto').strip().lower() != 'true']
+
+        # Buscar layout de adosamiento en la primera fila CONJ que lo tenga
+        adosamiento = None
+        for f in filas_conj:
+            raw = _c(f, 'adosamiento').strip()
+            if raw:
+                try:
+                    adosamiento = _json.loads(raw)
+                    break
+                except Exception:
+                    pass
+
+        # ── CONJUNTO ADOSADO ──────────────────────────────────────────────────
+        if filas_conj and adosamiento and adosamiento.get('placed'):
+            nombre   = f"{base_nombre}-ADO"
+            ruta_sal = os.path.join(CARPETA_SALIDA, f"{nombre}.dxf")
+            print(f"\nGenerando (adosado): {nombre}")
+            generar_adosado(filas_conj, adosamiento, PLANTILLA_DXF, ruta_sal)
+
+        elif filas_conj:
+            # CONJ sin layout → generar individualmente como fallback
+            for i, fila in enumerate(filas_conj, 1):
+                mod = _c(fila, 'modulo') or f'M{i}'
+                nombre   = f"{base_nombre}-{mod}"
+                ruta_sal = os.path.join(CARPETA_SALIDA, f"{nombre}.dxf")
+                print(f"\nGenerando: {nombre}")
+                generar_modulo(fila, PLANTILLA_DXF, ruta_sal)
+
+        # ── MÓDULOS AISLADOS ──────────────────────────────────────────────────
+        for i, fila in enumerate(filas_ais, 1):
+            mod = _c(fila, 'modulo') or f'M{i}'
+            if len(filas_ais) == 1 and not filas_conj:
+                nombre = base_nombre          # pedido de 1 módulo: nombre limpio
+            else:
+                nombre = f"{base_nombre}-{mod}"
+            ruta_sal = os.path.join(CARPETA_SALIDA, f"{nombre}.dxf")
+            print(f"\nGenerando: {nombre}")
+            generar_modulo(fila, PLANTILLA_DXF, ruta_sal)
 
     print(f"\n{chr(9472)*50}\nArchivos en: {CARPETA_SALIDA}\n{chr(9472)*50}")
     input("\nPulsa Enter para salir...")

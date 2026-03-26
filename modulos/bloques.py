@@ -9,7 +9,7 @@ from .plano_base import _munon_pilar_str
 
 def dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase, long_pilar, A,
                                panel_grosor, g_carril, panel_tipo, serie,
-                               suministro, tipo_tablero, acabado):
+                               suministro, tipo_tablero, acabado, skip_serie=False):
     cx = (x0 + x1) / 2.0
 
     str_mun, str_pil = _munon_pilar_str(A, long_pilar, panel_grosor)
@@ -73,13 +73,18 @@ def dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase, long_pilar, A,
         _arc.transparency = 0.5
 
     cy = (y0 + y1) / 2.0
+    mostrar_serie = not skip_serie and n_uds > 1
 
     # 7. RECUADRO TABLERO Y SUELO
+    # Si va acompañado del bloque serie → offset -198.3 (par centrado visualmente)
+    # Si va solo (1 unidad) → centrado exacto en cy
+    tab_y = cy - 198.3 if mostrar_serie else cy
     ref = msp.add_blockref('RECUADRO TABLERO Y SUELO',
-                           insert=(cx, cy - 198.3), dxfattribs={'layer': 'TEXTO'})
+                           insert=(cx, tab_y), dxfattribs={'layer': 'TEXTO'})
     _attribs(ref, {'TABLERO_SUELO': tablero_suelo_val}, doc)
 
-    # 8. BLOQUE NÚMERO SERIE
-    ref = msp.add_blockref('BLOQUE NÚMERO SERIE',
-                           insert=(cx, cy + 225.6), dxfattribs={'layer': 'TEXTO'})
-    _attribs(ref, {'SERIE': serie or '-'}, doc)
+    # 8. BLOQUE NÚMERO SERIE — solo si hay más de 1 unidad
+    if mostrar_serie:
+        ref = msp.add_blockref('BLOQUE NÚMERO SERIE',
+                               insert=(cx, cy + 225.6), dxfattribs={'layer': 'TEXTO'})
+        _attribs(ref, {'SERIE': serie or '-'}, doc)

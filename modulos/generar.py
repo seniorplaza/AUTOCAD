@@ -27,6 +27,15 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
     base  = c("base")
     panel = c("panelGrosor")
 
+    modulo    = c("modulo") or "M1"
+    cantidad  = int(c("cantidad") or 1)
+    conjunto  = c("conjunto").strip().lower() == "true"
+    import json as _json
+    try:
+        adosamiento = _json.loads(c("adosamiento")) if c("adosamiento") else None
+    except Exception:
+        adosamiento = None
+
     hbase      = calc_hbase(L, A, base, panel)
     hcub       = calc_hcubierta(L, A, base, panel, c("cubierta"))
     long_pilar = H + 25

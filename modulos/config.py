@@ -7,9 +7,8 @@ import os
 # ─── RUTAS ────────────────────────────────────────────────────────────────────
 _RUTAS_PLANTILLA = [
     r"C:\Users\modulos6\OneDrive\AUTOCAD-1\PLANTILLA.dxf",
-    r"C:\Users\modulos6\OneDrive\AUTOCAD\PLANTILLA.dxf",
-    r"S:\OneDrive\AUTOCAD\PLANTILLA.dxf",
-    r"C:\Users\David\Desktop\AUTOCAD\PLANTILLA.dxf",
+    r"S:\OneDrive\AUTOCAD-1\PLANTILLA.dxf",
+    r"C:\Users\David\Desktop\AUTOCAD-1\PLANTILLA.dxf",
 ]
 PLANTILLA_DXF  = next((r for r in _RUTAS_PLANTILLA if os.path.isfile(r)), _RUTAS_PLANTILLA[0])
 CARPETA_SALIDA = os.path.join(os.path.dirname(PLANTILLA_DXF), "Generados")

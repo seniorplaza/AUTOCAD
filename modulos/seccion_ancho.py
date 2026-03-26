@@ -153,8 +153,8 @@ def dibujar_seccion_abajo(msp, doc, x0, y0, x1, y1, hbase, g_carril, tipo_tabler
     rect_y    = y0 - DY_PROF   # borde superior zona sección (justo debajo del módulo)
     _skip     = skip_faces or set()
     # CERRADO (no en skip) → tablero tapa el carril → extender 85mm hacia ese lado
-    tab_lft = tab_ofs - (85 if 'W' not in _skip else 0)
-    tab_rgt = tab_ofs - (85 if 'E' not in _skip else 0)
+    tab_lft = tab_ofs - (85 if 'E' not in _skip else 0)
+    tab_rgt = tab_ofs - (85 if 'W' not in _skip else 0)
 
     def _poly(pts_xy, layer, color=256):
         msp.add_lwpolyline(pts_xy, close=True, dxfattribs={'layer': layer, 'color': color})

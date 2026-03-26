@@ -217,14 +217,47 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
     top_xs    = [p['x'] for p in placed if abs((p['y'] + p['a']) - y1_max_mm) < EPS]
     x_top_izq = min(top_xs) if top_xs else x0_min_mm
 
-    # ── Caras a omitir por módulo (faceMap ABIERTO → sin carril) ────────────
+    # ── Caras a omitir por módulo ─────────────────────────────────────────────
     # faceMap: {key: {face: 'cerrado'|'abierto'}}
     raw_face_map = adosamiento.get('faceMap', {})
-    skip_faces_map = {}   # placed_key → set de caras a omitir
+
+    # skip_carriles_map: cara adyacente a otro módulo Y no marcada 'cerrado' → sin carril
+    # (default verde = abierto, no hay panel → no hay carril en esa cara)
+    skip_carriles_map = {}
+    _GAP = 10   # debe coincidir con ADO_GAP del configurador
+    _EPS = 15   # tolerancia mm para detectar adyacencia (gap ± holgura)
+    for p in placed:
+        for q in placed:
+            if q['key'] == p['key']:
+                continue
+            # ¿q al Este de p?
+            if abs(q['x'] - (p['x'] + p['l'] + _GAP)) <= _EPS:
+                if min(p['y']+p['a'], q['y']+q['a']) - max(p['y'], q['y']) > _EPS:
+                    if raw_face_map.get(p['key'], {}).get('E') != 'cerrado':
+                        skip_carriles_map.setdefault(p['key'], set()).add('E')
+            # ¿q al Oeste de p?
+            if abs(p['x'] - (q['x'] + q['l'] + _GAP)) <= _EPS:
+                if min(p['y']+p['a'], q['y']+q['a']) - max(p['y'], q['y']) > _EPS:
+                    if raw_face_map.get(p['key'], {}).get('W') != 'cerrado':
+                        skip_carriles_map.setdefault(p['key'], set()).add('W')
+            # ¿q al Norte de p?
+            if abs(q['y'] - (p['y'] + p['a'] + _GAP)) <= _EPS:
+                if min(p['x']+p['l'], q['x']+q['l']) - max(p['x'], q['x']) > _EPS:
+                    if raw_face_map.get(p['key'], {}).get('N') != 'cerrado':
+                        skip_carriles_map.setdefault(p['key'], set()).add('N')
+            # ¿q al Sur de p?
+            if abs(p['y'] - (q['y'] + q['a'] + _GAP)) <= _EPS:
+                if min(p['x']+p['l'], q['x']+q['l']) - max(p['x'], q['x']) > _EPS:
+                    if raw_face_map.get(p['key'], {}).get('S') != 'cerrado':
+                        skip_carriles_map.setdefault(p['key'], set()).add('S')
+
+    # skip_section_map: solo caras explícitamente 'abierto' en faceMap
+    # (controla la extensión del tablero en la sección — igual que antes)
+    skip_section_map = {}
     for key, faces in raw_face_map.items():
         for face, ftype in faces.items():
             if ftype == 'abierto':
-                skip_faces_map.setdefault(key, set()).add(face)
+                skip_section_map.setdefault(key, set()).add(face)
 
     # ── Series por módulo (modulo_label → lista de nº serie) ─────────────────
     serie_nums = {}
@@ -288,7 +321,7 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
 
         # Carriles (omitiendo caras ABIERTO)
         dibujar_carriles(msp, x0_m, y0_m, x1_m, y1_m, g_car_m, ancho_m,
-                         skip_faces=skip_faces_map.get(p['key']))
+                         skip_faces=skip_carriles_map.get(p["key"]))
 
         # Cotas correas — debajo si no rotado, a la derecha si rotado
         if is_bottom and not rotado_m:
@@ -393,11 +426,11 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
         if not rotado_m and is_right:
             dibujar_seccion_ancho(msp, doc, x0_m, y0_m, x1_m, y1_m,
                                   hbase_d, g_car_m, tipo_m, largo_m, base_m,
-                                  skip_faces=skip_faces_map.get(p['key']))
+                                  skip_faces=skip_section_map.get(p['key']))
         if rotado_m and is_bottom:
             dibujar_seccion_abajo(msp, doc, x0_m, y0_m, x1_m, y1_m,
                                   hbase_d, g_car_m, tipo_m, largo_m, base_m,
-                                  skip_faces=skip_faces_map.get(p['key']))
+                                  skip_faces=skip_section_map.get(p['key']))
 
         # Bloques centrados en cada módulo: Nº serie + tablero+suelo
         cx_m = (x0_m + x1_m) / 2.0

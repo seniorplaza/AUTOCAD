@@ -7,10 +7,13 @@ from .config import DIMSTYLE
 
 # ─── COTAS ────────────────────────────────────────────────────────────────────
 
-def cota_h(msp, doc, xa, ya, xb, yb, dim_y, dimstyle=DIMSTYLE, suffix=''):
+def cota_h(msp, doc, xa, ya, xb, yb, dim_y, dimstyle=DIMSTYLE, suffix='', color=None):
+    attribs = {'layer': 'Cotas'}
+    if color is not None:
+        attribs['color'] = color
     dim = msp.add_linear_dim(
         base=(xa, dim_y), p1=(xa, ya), p2=(xb, yb),
-        angle=0, dimstyle=dimstyle, dxfattribs={'layer':'Cotas'})
+        angle=0, dimstyle=dimstyle, dxfattribs=attribs)
     if suffix:
         dim.set_text(f'<> {suffix}')
     dim.render()

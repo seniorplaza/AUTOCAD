@@ -8,7 +8,7 @@ from .config import (
 
 # Largo del tablero en dirección A (ancho del módulo)
 TABLERO_LARGO = {'Hidrófugo': 2440, 'Fenólico': 2500, 'Fibrocemento': 2600}
-from .dxf_utils import cota_v
+from .dxf_utils import cota_v, cota_h
 
 # ─── OFFSETS ALZADO BASE (relativos a y1 del módulo) ──────────────────────────
 _ALZ_RECT_OFS_BOT   = 1186.0   # y1 → borde inferior rect ALZ-EST-BA-DIB
@@ -38,24 +38,29 @@ def insertar_pilares(msp, x0, y0, x1, y1, nombre_bloque):
 
 # ─── CARRILES ─────────────────────────────────────────────────────────────────
 
-def dibujar_carriles(msp, x0, y0, x1, y1, grosor, ancho_modulo=2350):
-    """2 carriles horizontales + 2 verticales en capa CARRIL (gris)."""
+def dibujar_carriles(msp, x0, y0, x1, y1, grosor, ancho_modulo=2350, skip_faces=None):
+    """2 carriles horizontales + 2 verticales en capa CARRIL (gris).
+    skip_faces: conjunto {'N','S','E','W'} — omite los carriles de esas caras (paredes ABIERTO).
+    """
+    skip = skip_faces or set()
     A = ancho_modulo
     ofs_h_x = CARRIL_OFS_H_X_MAP.get(A, CARRIL_OFS_H_X)
     cx_ini  = x0 + ofs_h_x
     cx_fin  = x1 - ofs_h_x
-    for cy_base in [y0 + CARRIL_OFS_H_Y, y1 - CARRIL_OFS_H_Y - grosor]:
+    for face, cy_base in [('S', y0 + CARRIL_OFS_H_Y), ('N', y1 - CARRIL_OFS_H_Y - grosor)]:
+        if face in skip: continue
         msp.add_lwpolyline(
             [(cx_ini, cy_base),(cx_fin, cy_base),(cx_fin, cy_base+grosor),(cx_ini, cy_base+grosor)],
             close=True, dxfattribs={'layer':'CARRIL', 'color':8})
     ofs_v_y = CARRIL_OFS_V_Y_MINI if A <= 1190 else CARRIL_OFS_V_Y_MAP.get(A, 170)
     cy_ini  = y0 + ofs_v_y
     cy_fin  = y1 - ofs_v_y
-    for cx_base in [x0 + CARRIL_OFS_V_X, x1 - CARRIL_OFS_V_X - grosor]:
+    for face, cx_base in [('W', x0 + CARRIL_OFS_V_X), ('E', x1 - CARRIL_OFS_V_X - grosor)]:
+        if face in skip: continue
         msp.add_lwpolyline(
             [(cx_base, cy_ini),(cx_base+grosor, cy_ini),(cx_base+grosor, cy_fin),(cx_base, cy_fin)],
             close=True, dxfattribs={'layer':'CARRIL', 'color':8})
-    print(f"  Carriles: grosor={grosor}mm  ofs_h_x={ofs_h_x}  ofs_v_y={ofs_v_y}")
+    print(f"  Carriles: grosor={grosor}mm  ofs_h_x={ofs_h_x}  ofs_v_y={ofs_v_y}  skip={skip or '-'}")
 
 
 # ─── MUÑONES / PILARES (texto) ────────────────────────────────────────────────
@@ -78,12 +83,13 @@ def _munon_pilar_str(A, long_pilar, panel_grosor=0):
 
 # ─── ALZADO BASE ──────────────────────────────────────────────────────────────
 
-def dibujar_alzado_base(msp, doc, x0, y0, x1, y1, hbase, correas, tipo_tablero, long_pilar, A, g_carril):
+def dibujar_alzado_base(msp, doc, x0, y0, x1, y1, hbase, correas, tipo_tablero, long_pilar, A, g_carril,
+                        draw_hbase_cota=True):
     """
     Dibuja encima del módulo:
     - Rectángulo verde ALZ-EST-BA-DIB (largo × hbase)
     - Bloques CORREA BASE en alzado (uno por correa)
-    - Cota vertical hbase (PMP-T-75) a la izquierda
+    - Cota vertical hbase (PMP-T-75) a la izquierda (omitida si draw_hbase_cota=False)
     """
     alz_y0 = y1 + _ALZ_RECT_OFS_BOT
     alz_y1 = alz_y0 + hbase
@@ -101,7 +107,36 @@ def dibujar_alzado_base(msp, doc, x0, y0, x1, y1, hbase, correas, tipo_tablero, 
                          insert=(x0 + pos, alz_cer_insert_y),
                          dxfattribs={'layer': 'ALZ-CER-DIB'})
 
-    cota_v(msp, doc, x0, alz_y0, x0, alz_y1, x0 + _COTA_HBASE_DX, 'PMP-T-75', color=5)
+    if draw_hbase_cota:
+        cota_v(msp, doc, x0, alz_y0, x0, alz_y1, x0 + _COTA_HBASE_DX, 'PMP-T-75', color=5)
+
+
+def dibujar_alzado_base_v(msp, doc, x0, y0, x1, y1, hbase, correas, draw_hbase_cota=True):
+    """
+    Alzado BASE para módulos ROTADOS: dibuja a la IZQUIERDA del módulo, verticalmente.
+    - Rectángulo verde ALZ-EST-BA-DIB (hbase × alto módulo)
+    - Bloques CORREA BASE (rotados 270°) en las posiciones Y de las correas
+    - Cota horizontal hbase (PMP-T-75) sobre el rectángulo
+    """
+    alz_x1 = x0 - _ALZ_RECT_OFS_BOT        # borde derecho rect (pegado al módulo)
+    alz_x0 = alz_x1 - hbase                 # borde izquierdo
+    for p1, p2 in [
+        ((alz_x0, y0), (alz_x0, y1)),
+        ((alz_x0, y1), (alz_x1, y1)),
+        ((alz_x1, y1), (alz_x1, y0)),
+        ((alz_x1, y0), (alz_x0, y0)),
+    ]:
+        msp.add_line(p1, p2, dxfattribs={'layer': 'ALZ-EST-BA-DIB'})
+
+    # Insert en el borde izquierdo (exterior) del rect; rotation=90 extiende el bloque en +Y (a lo largo del módulo)
+    for pos in correas:
+        msp.add_blockref('CORREA BASE',
+                         insert=(x0 - _ALZ_CER_INSERT_OFS, y0 + pos),
+                         dxfattribs={'layer': 'ALZ-CER-DIB', 'rotation': 90})
+
+    if draw_hbase_cota:
+        # Cota horizontal sobre el rectángulo (arriba)
+        cota_h(msp, doc, alz_x0, y1, alz_x1, y1, y1 - _COTA_HBASE_DX, 'PMP-T-75', color=5)
 
 
 # ─── ZONA DERECHA (sección carril) ────────────────────────────────────────────

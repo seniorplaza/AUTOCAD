@@ -12,8 +12,9 @@ from .calculos     import calc_hbase, nombre_bloque_pilar, grosor_carril, calc_c
 from .limpiar      import limpiar_modulo
 from .dxf_utils    import cota_h, cota_v, _attribs
 from .plano_base   import (insertar_pilares, dibujar_carriles,
-                           dibujar_alzado_base, dibujar_fleje, TABLERO_LARGO)
-from .seccion_ancho import dibujar_seccion_ancho
+                           dibujar_alzado_base, dibujar_alzado_base_v,
+                           dibujar_fleje, TABLERO_LARGO)
+from .seccion_ancho import dibujar_seccion_ancho, dibujar_seccion_abajo
 from .bloques      import dibujar_bloques_recuadros
 
 
@@ -74,6 +75,9 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
         print("  [WARN] adosamiento sin módulos placed — omitido")
         return
 
+    # Detectar variante: rotados = módulos en vertical (A > L)
+    any_rotado = any(p.get('a', 0) > p.get('l', 0) for p in placed)
+
     # ── Spec lookup: modulo label → fila CSV ──────────────────────────────────
     specs = {}
     for fila in filas_conj:
@@ -102,7 +106,7 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
 
     # ── Marco A3 dinámico (igual lógica que generar_modulo) ───────────────────
     MARCO_BASE_X0   = 393890.0
-    MARCO_BASE_Y0   = -111189.4
+    MARCO_BASE_Y0   = -110554.4 - (615.0 if any_rotado else 0.0)
     RATIO_A3        = 7110.0 / 5028.0
     MARGEN_X        = 1550.0
     MARGEN_Y_SUP    = 450.0
@@ -119,7 +123,7 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
         marco_h = h_min;  marco_w = marco_h * RATIO_A3
 
     total_real   = OFS_COR_BOT + float(A_total) + 3009.6
-    MARGEN_Y_INF = OFS_COR_BOT + (marco_h - total_real) / 2.0
+    MARGEN_Y_INF = OFS_COR_BOT + (marco_h - total_real) / 2.0 - 85.0 + (615.0 if any_rotado else 0.0)
 
     MARCO_X0 = MARCO_BASE_X0
     MARCO_Y0 = MARCO_BASE_Y0
@@ -204,9 +208,23 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
 
     # ── Detección de bordes (en coordenadas mm del layout) ────────────────────
     EPS        = 5
+    x0_min_mm  = min(p['x']           for p in placed)
     y0_min_mm  = min(p['y']           for p in placed)
     y1_max_mm  = max(p['y'] + p['a']  for p in placed)
     x1_max_mm  = max(p['x'] + p['l']  for p in placed)   # = L_total
+
+    # x del módulo top más a la izquierda (único que dibuja alzado y cota L)
+    top_xs    = [p['x'] for p in placed if abs((p['y'] + p['a']) - y1_max_mm) < EPS]
+    x_top_izq = min(top_xs) if top_xs else x0_min_mm
+
+    # ── Caras a omitir por módulo (faceMap ABIERTO → sin carril) ────────────
+    # faceMap: {key: {face: 'cerrado'|'abierto'}}
+    raw_face_map = adosamiento.get('faceMap', {})
+    skip_faces_map = {}   # placed_key → set de caras a omitir
+    for key, faces in raw_face_map.items():
+        for face, ftype in faces.items():
+            if ftype == 'abierto':
+                skip_faces_map.setdefault(key, set()).add(face)
 
     # ── Series por módulo (modulo_label → lista de nº serie) ─────────────────
     serie_nums = {}
@@ -226,21 +244,31 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
         x1_m = x0_m + L_m
         y1_m = y0_m + A_m
 
-        # ¿Está este módulo en el borde superior / inferior / derecho?
-        is_top    = abs((p['y'] + p['a']) - y1_max_mm) < EPS
-        is_bottom = abs(p['y']            - y0_min_mm) < EPS
-        is_right  = abs((p['x'] + p['l']) - x1_max_mm) < EPS
+        # ¿Está este módulo en el borde superior / inferior / derecho / izquierdo?
+        is_top      = abs((p['y'] + p['a']) - y1_max_mm) < EPS
+        is_bottom   = abs(p['y']            - y0_min_mm) < EPS
+        is_right    = abs((p['x'] + p['l']) - x1_max_mm) < EPS
+        is_left     = abs(p['x']            - x0_min_mm) < EPS
+        is_top_izq  = is_top and abs(p['x'] - x_top_izq) < EPS   # único que dibuja alzado+cota L
 
         base_m   = _cf(fila_m, 'base')
         panel_m  = _cf(fila_m, 'panelGrosor')
         tipo_m   = _tipo_tablero(base_m)
-        hbase_m  = calc_hbase(L_m, A_m, base_m, panel_m)
-        hbase_d  = hbase_m if isinstance(hbase_m, int) else (140 if "140" in str(hbase_m) else 160)
         g_car_m  = grosor_carril(panel_m)
-        correas_m, tablero_m = calc_correas(L_m, base_m, A_m, g_car_m)
-        blk_pil_m = nombre_bloque_pilar(A_m, panel_m)
 
-        print(f"    {p['modulo']} ({L_m}×{A_m})  pos=({p['x']},{p['y']})  "
+        # Detectar rotación: si A_m > L_m el módulo está girado 90°
+        rotado_m  = A_m > L_m
+        largo_m   = A_m if rotado_m else L_m   # dimensión larga (span correas)
+        ancho_m   = L_m if rotado_m else A_m   # dimensión corta (offset carriles/pilares)
+
+        hbase_m  = calc_hbase(largo_m, ancho_m, base_m, panel_m)
+        hbase_d  = hbase_m if isinstance(hbase_m, int) else (140 if "140" in str(hbase_m) else 160)
+        correas_m, tablero_m = calc_correas(largo_m, base_m, ancho_m, g_car_m)
+        blk_pil_m = nombre_bloque_pilar(ancho_m, panel_m)
+        # Correas para el alzado (siempre en el eje X del módulo = L_m)
+        correas_alz = calc_correas(L_m, base_m, A_m, g_car_m)[0] if rotado_m else correas_m
+
+        print(f"    {p['modulo']} ({L_m}×{A_m})  rotado={rotado_m}  pos=({p['x']},{p['y']})  "
               f"hbase={hbase_m}  correas={len(correas_m)}")
 
         # Contorno
@@ -248,23 +276,34 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
             [(x0_m,y0_m),(x1_m,y0_m),(x1_m,y1_m),(x0_m,y1_m)],
             close=True, dxfattribs={'layer':'PL-LIM-CASETA'})
 
-        # Correas
-        for pos in correas_m:
-            msp.add_line((x0_m+pos,y0_m),(x0_m+pos,y1_m),
-                         dxfattribs={'layer':'CORREAS','color':4})
+        # Correas — verticales si no rotado, horizontales si rotado
+        if rotado_m:
+            for pos in correas_m:
+                msp.add_line((x0_m, y0_m+pos), (x1_m, y0_m+pos),
+                             dxfattribs={'layer':'CORREAS','color':4})
+        else:
+            for pos in correas_m:
+                msp.add_line((x0_m+pos, y0_m), (x0_m+pos, y1_m),
+                             dxfattribs={'layer':'CORREAS','color':4})
 
-        # Carriles
-        dibujar_carriles(msp, x0_m, y0_m, x1_m, y1_m, g_car_m, A_m)
+        # Carriles (omitiendo caras ABIERTO)
+        dibujar_carriles(msp, x0_m, y0_m, x1_m, y1_m, g_car_m, ancho_m,
+                         skip_faces=skip_faces_map.get(p['key']))
 
-        # Cotas correas (debajo) — solo en el módulo más bajo
-        if is_bottom:
+        # Cotas correas — debajo si no rotado, a la derecha si rotado
+        if is_bottom and not rotado_m:
             puntos_x = [x0_m] + [x0_m+pos for pos in correas_m] + [x1_m]
             for i in range(len(puntos_x)-1):
                 cota_h(msp, doc, puntos_x[i], y0_m, puntos_x[i+1], y0_m,
                        y0_m - OFS_COR_BOT_I, 'PMP-T-50')
+        if is_right and rotado_m:
+            puntos_y = [y0_m] + [y0_m+pos for pos in correas_m] + [y1_m]
+            for i in range(len(puntos_y)-1):
+                cota_v(msp, doc, x1_m, puntos_y[i], x1_m, puntos_y[i+1],
+                       x1_m + OFS_COR_BOT_I, 'PMP-T-50')
 
-        # Cotas tablero y cota L — solo en el módulo más alto
-        if is_top:
+        # Cotas tablero — en el eje largo del módulo
+        if is_top and not rotado_m:
             if correas_m:
                 x_ti = x0_m + CARRIL_OFS_V_X + g_car_m + 5
                 x_tf = x1_m - CARRIL_OFS_V_X - g_car_m - 5
@@ -291,37 +330,100 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
                             x_t += tablero_m
                 else:
                     cota_h(msp, doc, x_ti, y1_m, x_tf, y1_m, y1_m+OFS_TAB, 'PMP-T-50', tipo_m)
-            cota_h(msp, doc, x0_m, y1_m, x1_m, y1_m, y1_m+OFS_TOT, 'PMP-T-60')
+        if is_left and rotado_m:
+            # Cotas tablero en Y para módulos rotados en columna izquierda
+            if correas_m:
+                y_ti = y0_m + CARRIL_OFS_V_X + g_car_m + 5
+                y_tf = y1_m - CARRIL_OFS_V_X - g_car_m - 5
+                span = y_tf - y_ti
+                n_full = int(span // tablero_m)
+                if n_full > 0:
+                    partial = span - n_full * tablero_m
+                    if partial <= tablero_m / 2:
+                        if partial < tablero_m / 2:
+                            n_full -= 1; partial = span - n_full * tablero_m
+                        first = y_ti + partial / 2.0
+                        if partial / 2.0 > 1:
+                            cota_v(msp, doc, x0_m, y_ti, x0_m, first, x0_m-OFS_TAB, 'PMP-T-50', suffix=tipo_m)
+                        for i in range(n_full):
+                            cota_v(msp, doc, x0_m, first+i*tablero_m, x0_m, first+(i+1)*tablero_m, x0_m-OFS_TAB, 'PMP-T-50', suffix=tipo_m)
+                        last = first + n_full * tablero_m
+                        if y_tf - last > 1:
+                            cota_v(msp, doc, x0_m, last, x0_m, y_tf, x0_m-OFS_TAB, 'PMP-T-50', suffix=tipo_m)
+                    else:
+                        y_t = y_ti
+                        while y_t < y_tf:
+                            fin = min(y_t + tablero_m, y_tf)
+                            cota_v(msp, doc, x0_m, y_t, x0_m, fin, x0_m-OFS_TAB, 'PMP-T-50', suffix=tipo_m)
+                            y_t += tablero_m
+                else:
+                    cota_v(msp, doc, x0_m, y_ti, x0_m, y_tf, x0_m-OFS_TAB, 'PMP-T-50', suffix=tipo_m)
 
-        # Cota A (izquierda) — todos los módulos
-        hay_fleje_m = (A_m - 2*(CARRIL_OFS_H_Y + g_car_m)) > TABLERO_LARGO.get(tipo_m, 2440)
-        ofs_cota_a  = OFS_IZQ + 200 if hay_fleje_m else OFS_IZQ
-        cota_v(msp, doc, x0_m, y0_m, x0_m, y1_m, x0_m - ofs_cota_a, 'PMP-T-60')
-        if hay_fleje_m:
-            dibujar_fleje(msp, doc, x0_m, y0_m, x1_m, y1_m, g_car_m, tipo_m,
-                          x_cota=x0_m - OFS_IZQ + 110)
-
-        # Alzado base — solo en el módulo más alto
+        # Cota total L (arriba) — todos los top
+        # Para módulos rotados la cota queda más cerca (no hay alzado encima)
+        ofs_tot_m = 250 if rotado_m else OFS_TOT
         if is_top:
+            cota_h(msp, doc, x0_m, y1_m, x1_m, y1_m, y1_m + ofs_tot_m, 'PMP-T-60')
+
+        # Cota total A (izquierda) — solo columna más a la izquierda
+        hay_fleje_m = (ancho_m - 2*(CARRIL_OFS_H_Y + g_car_m)) > TABLERO_LARGO.get(tipo_m, 2440)
+        if is_left:
+            # Para rotados: empujar A cota más lejos para que no solape con las de tablero
+            ofs_cota_a = (OFS_IZQ + OFS_TAB + 100) if rotado_m else (OFS_IZQ + 200 if hay_fleje_m else OFS_IZQ)
+            cota_v(msp, doc, x0_m, y0_m, x0_m, y1_m, x0_m - ofs_cota_a, 'PMP-T-60')
+            if hay_fleje_m and not rotado_m:
+                dibujar_fleje(msp, doc, x0_m, y0_m, x1_m, y1_m, g_car_m, tipo_m,
+                              x_cota=x0_m - OFS_IZQ + 110)
+
+        # Alzado base:
+        #   - No rotado: encima del módulo (cara larga = top), solo para is_top
+        #   - Rotado: a la IZQUIERDA del módulo (cara larga = left), para is_left
+        if not rotado_m and is_top:
             dibujar_alzado_base(msp, doc, x0_m, y0_m, x1_m, y1_m,
-                                hbase_d, correas_m, tipo_m, int(_cf(fila_m,'h') or 2500)+25, A_m, g_car_m)
+                                hbase_d, correas_alz, tipo_m, int(_cf(fila_m,'h') or 2500)+25, ancho_m, g_car_m,
+                                draw_hbase_cota=is_top_izq)
+        if rotado_m and is_left:
+            dibujar_alzado_base_v(msp, doc, x0_m, y0_m, x1_m, y1_m,
+                                  hbase_d, correas_m,
+                                  draw_hbase_cota=(is_top and is_left))
 
-        # Sección ancho — solo módulos en el borde derecho
-        if is_right:
+        # Sección (perfil):
+        #   - No rotado: a la DERECHA del módulo (cara corta = right), para is_right
+        #   - Rotado: DEBAJO del módulo (cara corta = bottom), para is_bottom
+        if not rotado_m and is_right:
             dibujar_seccion_ancho(msp, doc, x0_m, y0_m, x1_m, y1_m,
-                                  hbase_d, g_car_m, tipo_m, L_m, base_m)
+                                  hbase_d, g_car_m, tipo_m, largo_m, base_m,
+                                  skip_faces=skip_faces_map.get(p['key']))
+        if rotado_m and is_bottom:
+            dibujar_seccion_abajo(msp, doc, x0_m, y0_m, x1_m, y1_m,
+                                  hbase_d, g_car_m, tipo_m, largo_m, base_m,
+                                  skip_faces=skip_faces_map.get(p['key']))
 
-        # Nº serie individual por módulo — solo si el conjunto tiene más de 1 módulo
+        # Bloques centrados en cada módulo: Nº serie + tablero+suelo
+        cx_m = (x0_m + x1_m) / 2.0
+        cy_m = (y0_m + y1_m) / 2.0
+        acabado_m        = _cf(fila_m, 'acabado').strip()
+        tab_suelo_val    = f"{tipo_m.upper()} + {acabado_m}" if acabado_m else tipo_m.upper()
+
         if len(placed) > 1:
             pool_idx  = int(p.get('poolId', '_0').split('_')[-1])
             nums_mod  = serie_nums.get(p['modulo'], [])
             serie_val = nums_mod[pool_idx] if pool_idx < len(nums_mod) else (nums_mod[0] if nums_mod else '-')
-            cx_m = (x0_m + x1_m) / 2.0
-            cy_m = (y0_m + y1_m) / 2.0
             ref_serie = msp.add_blockref('Nº_SERIE_MÓDULO_CONJUNTO',
                                          insert=(cx_m, cy_m + 225.6),
                                          dxfattribs={'layer': 'TEXTO'})
             _attribs(ref_serie, {'Nº_SERIE_MÓDULO_CONJUNTO': serie_val}, doc)
+            # Tablero+suelo debajo del serie, alineado con él
+            ref_tab = msp.add_blockref('RECUADRO TABLERO Y SUELO',
+                                       insert=(cx_m, cy_m - 198.3),
+                                       dxfattribs={'layer': 'TEXTO'})
+            _attribs(ref_tab, {'TABLERO_SUELO': tab_suelo_val}, doc)
+        else:
+            # 1 módulo en el conjunto: solo tablero+suelo centrado
+            ref_tab = msp.add_blockref('RECUADRO TABLERO Y SUELO',
+                                       insert=(cx_m, cy_m),
+                                       dxfattribs={'layer': 'TEXTO'})
+            _attribs(ref_tab, {'TABLERO_SUELO': tab_suelo_val}, doc)
 
         # Pilares (encima del todo para draw order)
         insertar_pilares(msp, x0_m, y0_m, x1_m, y1_m, blk_pil_m)
@@ -333,11 +435,6 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
             'fila':fila_m,
         })
 
-    # ── Cotas globales del conjunto ───────────────────────────────────────────
-    # Cota total L (debajo de todo el conjunto)
-    y_cota_tot = y0_tot - OFS_TOT
-    cota_h(msp, doc, x0_tot, y0_tot, x1_tot, y0_tot, y_cota_tot, 'PMP-T-60')
-
     # ── Bloques recuadros (usando bbox total y specs de fila0) ────────────────
     long_pilar0 = int(_cf(fila0,'h') or 2500) + 25
     panel0  = _cf(fila0, 'panelGrosor')
@@ -348,13 +445,25 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
     hbase0_d = hbase0 if isinstance(hbase0, int) else (140 if "140" in str(hbase0) else 160)
     tipo0   = _tipo_tablero(_cf(fila0,'base'))
 
+    # ¿Hay módulos rotados? → el bloque H PERFIL BASE va debajo del alzado vertical
     dibujar_bloques_recuadros(
         msp, doc,
         x0_tot, y0_tot, x1_tot, y1_tot,
         hbase0_d, long_pilar0, int(_cf(fila0,'a') or 2350),
         panel0, g_car0, _cf(fila0,'panelTipo'), _cf(fila0,'serie'),
         _cf(fila0,'suministro'), tipo0, _cf(fila0,'acabado'),
-        skip_serie=True)
+        skip_serie=True, skip_tablero_suelo=True, skip_hbase_bloque=any_rotado,
+        encima_ofs=515 if any_rotado else -100)
+
+    # Para módulos rotados: colocar RECUADRO H PERFIL BASE debajo del alzado vertical,
+    # girado 90°, centrado en el eje X del alzado del módulo más a la izquierda.
+    if any_rotado:
+        p_left  = min(placed, key=lambda p: p['x'])
+        x0_left = x_base + p_left['x']
+        ref_hb = msp.add_blockref('RECUADRO H PERFIL BASE Xmm',
+                                   insert=(x0_left - 909.5, y1_tot),
+                                   dxfattribs={'layer': 'Cotas', 'rotation': 90})
+        _attribs(ref_hb, {'HBASE': str(hbase0_d)}, doc)
 
     # ── Vista inicial ─────────────────────────────────────────────────────────
     cx_view = (MARCO_X0 + MARCO_X1) / 2.0

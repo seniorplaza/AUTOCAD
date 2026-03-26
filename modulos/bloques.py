@@ -9,7 +9,9 @@ from .plano_base import _munon_pilar_str
 
 def dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase, long_pilar, A,
                                panel_grosor, g_carril, panel_tipo, serie,
-                               suministro, tipo_tablero, acabado, skip_serie=False):
+                               suministro, tipo_tablero, acabado, skip_serie=False,
+                               skip_tablero_suelo=False, skip_hbase_bloque=False,
+                               encima_ofs=0):
     cx = (x0 + x1) / 2.0
 
     str_mun, str_pil = _munon_pilar_str(A, long_pilar, panel_grosor)
@@ -34,24 +36,25 @@ def dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase, long_pilar, A,
     uds_val = f"{n_uds} UNIDADES" if n_uds != 1 else "1 UNIDAD"
 
     # 1. RECUADRO H PERFIL BASE Xmm
-    ref = msp.add_blockref('RECUADRO H PERFIL BASE Xmm',
-                           insert=(x1, y1+909.5), dxfattribs={'layer': 'Cotas'})
-    _attribs(ref, {'HBASE': str(hbase)}, doc)
+    if not skip_hbase_bloque:
+        ref = msp.add_blockref('RECUADRO H PERFIL BASE Xmm',
+                               insert=(x1, y1+909.5), dxfattribs={'layer': 'Cotas'})
+        _attribs(ref, {'HBASE': str(hbase)}, doc)
 
     # 2. RECUADROS MEDIDAS PILARES - MUÑONES
     ref = msp.add_blockref('RECUADROS MEDIDAS PILARES - MUÑONES',
-                           insert=(cx, y1+1784.3), dxfattribs={'layer': 'TEXTO'})
+                           insert=(cx, y1+1784.3-encima_ofs), dxfattribs={'layer': 'TEXTO'})
     _attribs(ref, {'MUÑONES': mun_val, 'PILARES': pil_val}, doc)
 
     # 3. RECUADRO TÍTULO PLANO
     ref = msp.add_blockref('RECUADRO TÍTULO PLANO',
-                           insert=(cx, y1+3009.6), dxfattribs={'layer': 'Cotas'})
+                           insert=(cx, y1+3009.6-encima_ofs), dxfattribs={'layer': 'Cotas'})
     _attribs(ref, {'TABLERO': tablero_val}, doc)
 
     # Textos *COMPROBAR centrados en el módulo
     for dy, txt in [
-        (2349.0, '*COMPROBAR LA MEDIDA DEL TABLERO ANTES DE SOLDAR'),
-        (2093.0, '*COMPROBAR LAS DIMENSIONES DE LOS MUÑONES CON LOS PILARES'),
+        (2349.0-encima_ofs, '*COMPROBAR LA MEDIDA DEL TABLERO ANTES DE SOLDAR'),
+        (2093.0-encima_ofs, '*COMPROBAR LAS DIMENSIONES DE LOS MUÑONES CON LOS PILARES'),
     ]:
         t_ent = msp.add_text(txt, dxfattribs={'layer': 'TEXTO', 'height': 82.9})
         t_ent.set_placement((cx, y1+dy), align=TextEntityAlignment.CENTER)
@@ -60,7 +63,7 @@ def dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase, long_pilar, A,
     if A > 1190:
         ud_x = max(x1+714.2, cx + 1900.0)
         ref = msp.add_blockref('RECUADRO NÚMERO DE UD (MÓDULOS) NUMERO SERIE',
-                               insert=(ud_x, y1+2952.2595), dxfattribs={'layer': 'Cotas'})
+                               insert=(ud_x, y1+2952.2595-encima_ofs), dxfattribs={'layer': 'Cotas'})
         _attribs(ref, {'4UNIDADES_1UNIDAD': uds_val}, doc)
 
         ref = msp.add_blockref('CARRIL PARA PANEL DE Xmm',
@@ -75,13 +78,12 @@ def dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase, long_pilar, A,
     cy = (y0 + y1) / 2.0
     mostrar_serie = not skip_serie and n_uds > 1
 
-    # 7. RECUADRO TABLERO Y SUELO
-    # Si va acompañado del bloque serie → offset -198.3 (par centrado visualmente)
-    # Si va solo (1 unidad) → centrado exacto en cy
-    tab_y = cy - 198.3 if mostrar_serie else cy
-    ref = msp.add_blockref('RECUADRO TABLERO Y SUELO',
-                           insert=(cx, tab_y), dxfattribs={'layer': 'TEXTO'})
-    _attribs(ref, {'TABLERO_SUELO': tablero_suelo_val}, doc)
+    # 7. RECUADRO TABLERO Y SUELO (omitido en conjuntos, que lo colocan por módulo)
+    if not skip_tablero_suelo:
+        tab_y = cy - 198.3 if mostrar_serie else cy
+        ref = msp.add_blockref('RECUADRO TABLERO Y SUELO',
+                               insert=(cx, tab_y), dxfattribs={'layer': 'TEXTO'})
+        _attribs(ref, {'TABLERO_SUELO': tablero_suelo_val}, doc)
 
     # 8. BLOQUE NÚMERO SERIE — solo si hay más de 1 unidad
     if mostrar_serie:

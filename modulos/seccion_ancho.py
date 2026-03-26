@@ -59,7 +59,7 @@ def _perfil_seccion(doc, L, g_carril, base, hbase=137):
     return None
 
 
-def dibujar_seccion_ancho(msp, doc, x0, y0, x1, y1, hbase, g_carril, tipo_tablero, L, base):
+def dibujar_seccion_ancho(msp, doc, x0, y0, x1, y1, hbase, g_carril, tipo_tablero, L, base, skip_faces=None):
     """
     Sección del módulo por el lado ancho (A), a la derecha del módulo:
     - Perfil inferior (y0) y superior (y1): desde VARIACIONES con rot. 90°CW+180°
@@ -87,15 +87,19 @@ def dibujar_seccion_ancho(msp, doc, x0, y0, x1, y1, hbase, g_carril, tipo_tabler
     cor_w     = 100
     profile_w = g_carril + 65
     rect_x    = x1 + DX_PROF - (0.1322 if es_fibro else 0.0)
+    _skip     = skip_faces or set()
+    # CERRADO (no en skip) → tablero tapa el carril → extender 85mm hacia ese lado
+    tab_bot = tab_ofs - (85 if 'S' not in _skip else 0)
+    tab_top = tab_ofs - (85 if 'N' not in _skip else 0)
 
     def _poly(pts_xy, layer, color=256):
         msp.add_lwpolyline(pts_xy, close=True, dxfattribs={'layer': layer, 'color': color})
 
     # Tablero (amarillo) — borde derecho fijo, crece hacia la izquierda
-    _poly([(rect_x-grosor_t, y0+tab_ofs),
-           (rect_x,          y0+tab_ofs),
-           (rect_x,          y1-tab_ofs),
-           (rect_x-grosor_t, y1-tab_ofs)], 'Cotas', 2)
+    _poly([(rect_x-grosor_t, y0+tab_bot),
+           (rect_x,          y0+tab_bot),
+           (rect_x,          y1-tab_top),
+           (rect_x-grosor_t, y1-tab_top)], 'Cotas', 2)
 
     # Correa (cian)
     _poly([(rect_x+2,         y0+cor_ofs),
@@ -115,6 +119,71 @@ def dibujar_seccion_ancho(msp, doc, x0, y0, x1, y1, hbase, g_carril, tipo_tabler
     # BLOQUE TABLERO SECCIÓN
     ref = msp.add_blockref('BLOQUE TABLERO SECCIÓN',
                            insert=(x1+DX_PROF+hbase+30, y0+A/2-139),
+                           dxfattribs={'layer': 'TEXTO'})
+    _attribs(ref, {
+        'TIPO_TABLERO':          tipo_txt,
+        'TABLERO':               tab_txt,
+        'NÚMERO_GROSOR_TABLERO': str(grosor_t),
+    }, doc)
+
+
+def dibujar_seccion_abajo(msp, doc, x0, y0, x1, y1, hbase, g_carril, tipo_tablero, L, base, skip_faces=None):
+    """
+    Sección del módulo por la CARA CORTA, debajo del módulo (para módulos rotados).
+    Equivale a dibujar_seccion_ancho rotada 90°: los perfiles van en los extremos X.
+    """
+    if not isinstance(hbase, int):
+        return
+
+    _tt = (tipo_tablero or '').upper().replace('Ó','O').replace('É','E').replace('Í','I')
+    es_fen   = 'FENOL' in _tt
+    es_fibro = 'FIBRO' in _tt
+    if es_fibro:
+        grosor_t = 8;   tipo_txt = 'TABLERO';   tab_txt = 'FIBROCEMENTO'
+    elif es_fen:
+        grosor_t = 18;  tipo_txt = 'TABLERO';   tab_txt = 'FENÓLICO'
+    else:
+        grosor_t = 19;  tipo_txt = 'AGLOMERADO'; tab_txt = 'HIDRÓFUGO'
+
+    DY_PROF   = 333.5
+    tab_ofs   = g_carril + 40
+    cor_ofs   = tab_ofs + 2
+    cor_w     = 100
+    profile_w = g_carril + 65
+    rect_y    = y0 - DY_PROF   # borde superior zona sección (justo debajo del módulo)
+    _skip     = skip_faces or set()
+    # CERRADO (no en skip) → tablero tapa el carril → extender 85mm hacia ese lado
+    tab_lft = tab_ofs - (85 if 'W' not in _skip else 0)
+    tab_rgt = tab_ofs - (85 if 'E' not in _skip else 0)
+
+    def _poly(pts_xy, layer, color=256):
+        msp.add_lwpolyline(pts_xy, close=True, dxfattribs={'layer': layer, 'color': color})
+
+    # Tablero (amarillo) — franja horizontal
+    _poly([(x0+tab_lft, rect_y+0.0028),
+           (x1-tab_rgt, rect_y+0.0028),
+           (x1-tab_rgt, rect_y+0.0028+grosor_t),
+           (x0+tab_lft, rect_y+0.0028+grosor_t)], 'Cotas', 2)
+
+    # Correa (cian) — empieza justo debajo del tablero
+    _poly([(x0+cor_ofs, rect_y-grosor_t+17.0028),
+           (x1-cor_ofs, rect_y-grosor_t+17.0028),
+           (x1-cor_ofs, rect_y-grosor_t+17.0028-cor_w),
+           (x0+cor_ofs, rect_y-grosor_t+17.0028-cor_w)], 'CORREAS', 4)
+
+    # Perfiles desde VARIACIONES — izquierdo y derecho
+    result = _perfil_seccion(doc, L, g_carril, base, hbase)
+    if result:
+        verts, x_cl, y_cl = result
+        lft = [(x0+(profile_w-lx), rect_y-(hbase-ly)) for lx, ly in verts]
+        rgt = [(x1-(profile_w-lx), rect_y-(hbase-ly)) for lx, ly in verts]
+        _poly(lft, 'PL-CER-DIB')
+        _poly(rgt, 'PL-CER-DIB')
+
+    # BLOQUE TABLERO SECCIÓN — centrado horizontalmente bajo los perfiles
+    cx_sec = (x0 + x1) / 2.0
+    ref = msp.add_blockref('BLOQUE TABLERO SECCIÓN',
+                           insert=(cx_sec, rect_y - hbase - 80 - 375),
                            dxfattribs={'layer': 'TEXTO'})
     _attribs(ref, {
         'TIPO_TABLERO':          tipo_txt,

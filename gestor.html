@@ -2534,7 +2534,7 @@
                         <select onchange="updateValue(${item.id}, 'suministro', this.value)" class="select-card suministro-select">
                             <option value="" ${!item.suministro ? 'selected' : ''}>-</option>
                             <option value="ARMADO" ${item.suministro === 'ARMADO' ? 'selected' : ''}>ARMADO</option>
-                            <option value="KIT" ${item.suministro === 'KIT' ? 'selected' : ''}>KIT</option>
+                            <option value="KIT" ${item.suministro === 'KIT' ? 'selected' : ''}>KIT${item.suministro === 'KIT' ? ` | ${kitVariant(item)}` : ''}</option>
                             <option value="MECANO" ${item.suministro === 'MECANO' ? 'selected' : ''}>MECANO</option>
                         </select>
                     </td>
@@ -3319,6 +3319,17 @@
             tbody.addEventListener('keydown', handleCellKeydown);
         }
 
+        function kitVariant(item) {
+            // Sin panel → E80 (solo estructura)
+            if (!item.panelGrosor || !parseInt(item.panelGrosor)) return 'E80';
+            const l = parseInt(item.l) || 0;
+            if (l >= 6000) return 'E90';
+            if (l >= 5000) return 'E230';
+            if (l >= 4000) return 'E270';
+            if (l >= 3000) return 'E290';
+            return 'E80 P';  // < 3000mm — paletizado
+        }
+
         function updateValue(id, key, value) {
             const index = orders.findIndex(o => o.id === id);
             if (index !== -1) {
@@ -3332,8 +3343,8 @@
                     showSaveStatus(); 
                 }
                 
-                // Si se modifica L, A o BASE, siempre forzar renderTable para recalcular estructura
-                if (key === 'l' || key === 'a' || key === 'base') {
+                // Si se modifica L, A, BASE, panelGrosor o suministro, recalcular tabla
+                if (key === 'l' || key === 'a' || key === 'base' || key === 'panelGrosor' || key === 'suministro') {
                     renderTable();
                 }
             }
@@ -4690,12 +4701,14 @@
         };
 
         let adoState = {
-            groupKey:    null,
-            pool:        [],    // [{poolId, rowId, modulo, l, a}]
-            placed:      [],    // [{key, poolId, modulo, l, a, x, y}]
-            pending:     null,  // {targetKey, dir} — esperando selección de módulo
-            wallMap:     {},    // 'key1||key2' (sorted) → 'cerrado'|'abierto'
-            pendingWall: null,  // wid activo en el menú de pared
+            groupKey:     null,
+            pool:         [],    // [{poolId, rowId, modulo, l, a, ...}]
+            placed:       [],    // [{key, poolId, modulo, l, a, x, y}]
+            pending:      null,  // {targetKey, dir} — esperando selección de módulo
+            faceMap:      {},    // {key: {face: 'cerrado'|'abierto'}}
+            pendingWall:  null,  // wall pair activo en el menú
+            dragging:     null,  // {key, offX, offY, origX, origY} — drag en curso
+            renderParams: null,  // {scale, dx, dy, W, H} — última renderización
         };
 
         function openAdosamientoConfig(groupKey) {
@@ -4716,11 +4729,14 @@
                 const qty = Math.max(1, parseInt(row.cantidad) || 1);
                 for (let i = 0; i < qty; i++) {
                     adoState.pool.push({
-                        poolId: `${row.id}_${i}`,
-                        rowId: row.id,
-                        modulo: row.modulo || 'M1',
-                        l: parseInt(row.l) || 6000,
-                        a: parseInt(row.a) || 2350,
+                        poolId:      `${row.id}_${i}`,
+                        rowId:       row.id,
+                        modulo:      row.modulo || 'M1',
+                        l:           parseInt(row.l) || 6000,
+                        a:           parseInt(row.a) || 2350,
+                        panelGrosor: row.panelGrosor || '',
+                        base:        row.base || 'HIDRÓFUGO',
+                        acabado:     row.acabado || '',
                     });
                 }
             });
@@ -4734,7 +4750,13 @@
                 adoState.placed = [{ key:'k0', poolId:p.poolId, modulo:p.modulo, l:p.l, a:p.a, x:0, y:0 }];
             }
 
+            // Cargar faceMap guardado
+            adoState.faceMap = (firstConj.adosamiento && firstConj.adosamiento.faceMap)
+                               ? JSON.parse(JSON.stringify(firstConj.adosamiento.faceMap))
+                               : {};
+
             adoState.pending = null;
+            adoState.pendingWall = null;
             document.getElementById('adoModal').style.display = 'flex';
             setTimeout(adoRender, 30); // esperar a que el DOM esté pintado
         }
@@ -4742,6 +4764,7 @@
         function adoClose() {
             document.getElementById('adoModal').style.display = 'none';
             adoPickerClose();
+            adoWallMenuClose();
         }
 
         function adoModalBackdrop(e) {
@@ -4751,7 +4774,9 @@
         function adoReset() {
             const p = adoState.pool[0];
             adoState.placed = [{ key:'k0', poolId:p.poolId, modulo:p.modulo, l:p.l, a:p.a, x:0, y:0 }];
+            adoState.faceMap = {};
             adoPickerClose();
+            adoWallMenuClose();
             adoRender();
         }
 
@@ -4793,6 +4818,17 @@
             const svgX = mmX => dx + mmX * scale;
             const svgY = mmY => H - (dy + mmY * scale);
 
+            // Guardar params para conversión durante drag
+            adoState.renderParams = { scale, dx, dy, W, H };
+
+            // Configurar eventos de drag en el SVG (una sola vez)
+            if (!svg._adoDragSetup) {
+                svg._adoDragSetup = true;
+                svg.addEventListener('mousemove', e => adoDragMove(e));
+                svg.addEventListener('mouseup',    () => adoDragEnd());
+                svg.addEventListener('mouseleave', () => { if (adoState.dragging) adoDragEnd(); });
+            }
+
             const unplaced = adoUnplaced();
             const canAdd = unplaced.length > 0;
             const PR = 11; // radio botón (+)
@@ -4801,42 +4837,117 @@
                 const sx = svgX(m.x),       sy = svgY(m.y + m.a);
                 const sw = m.l * scale,     sh = m.a * scale;
                 const col = ADO_COLORS[m.modulo] || ADO_COLORS['M1'];
+                // Datos extra desde el pool
+                const slot = adoState.pool.find(p => p.poolId === m.poolId) || {};
+
+                const isDragging   = adoState.dragging && adoState.dragging.key === m.key;
+                const isSwapTarget = adoState.dragging && adoState.dragging.swapTarget === m.key;
 
                 const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+                g.style.cursor = isDragging ? 'grabbing' : 'grab';
 
                 // Rectángulo
                 const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
                 Object.entries({ x:sx, y:sy, width:sw, height:sh,
-                    fill:col.fill, stroke:col.stroke, 'stroke-width':1.5, rx:4 })
+                    fill:   isSwapTarget ? 'rgba(20,184,166,0.25)' : col.fill,
+                    stroke: isSwapTarget ? '#5eead4' : (isDragging ? 'rgba(255,255,255,0.6)' : col.stroke),
+                    'stroke-width': (isDragging || isSwapTarget) ? 2.5 : 1.5, rx:4 })
                     .forEach(([k,v]) => rect.setAttribute(k,v));
+                if (isDragging) rect.setAttribute('opacity', '0.65');
                 g.appendChild(rect);
 
-                const fs = Math.min(Math.max(sw*0.16, 9), 17);
+                // Iniciar drag al pulsar sobre el módulo
+                g.addEventListener('mousedown', e => {
+                    if (e.button !== 0) return;
+                    // No iniciar si se pulsó sobre un botón (× o +)
+                    let el = e.target;
+                    while (el && el !== g) {
+                        if (el.dataset && el.dataset.nodrag) return;
+                        el = el.parentNode;
+                    }
+                    e.preventDefault();
+                    const rp = adoState.renderParams;
+                    const r  = document.getElementById('adoSvg').getBoundingClientRect();
+                    const mmX = (e.clientX - r.left  - rp.dx) / rp.scale;
+                    const mmY = (rp.H - (e.clientY - r.top) - rp.dy) / rp.scale;
+                    adoPickerClose(); adoWallMenuClose();
+                    adoState.dragging = { key: m.key, offX: mmX - m.x, offY: mmY - m.y,
+                                          origX: m.x, origY: m.y };
+                });
 
-                // Etiqueta módulo
-                const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
-                Object.entries({ x:sx+sw/2, y:sy+sh/2 - (sh>35?9:0),
-                    'text-anchor':'middle','dominant-baseline':'middle',
-                    fill:col.text,'font-size':fs,'font-weight':700,'font-family':'monospace' })
-                    .forEach(([k,v]) => lbl.setAttribute(k,v));
-                lbl.textContent = m.modulo;
-                g.appendChild(lbl);
+                const fs  = Math.min(Math.max(sw*0.16, 9), 17);
+                const fs2 = Math.max(fs * 0.62, 7.5);
 
-                // Dimensiones
-                if (sh > 30) {
-                    const dim = document.createElementNS('http://www.w3.org/2000/svg','text');
-                    Object.entries({ x:sx+sw/2, y:sy+sh/2+fs*0.7,
+                // Abreviatura de tablero: primera letra (H, F, Fb)
+                const tableroBase = (slot.base || 'HIDRÓFUGO').trim().toUpperCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g,''); // quitar acentos
+                const tableroShort = tableroBase.startsWith('FIB') ? 'Fb'
+                                   : tableroBase.startsWith('FEN') ? 'F'
+                                   : tableroBase.charAt(0);
+                const tableroFull  = (slot.base || 'HIDRÓFUGO').split(' ')[0];
+
+                // Abreviatura de acabado: primeras 4 letras + punto
+                const acabadoFull  = slot.acabado || '';
+                const acabadoShort = acabadoFull.length > 4 ? acabadoFull.slice(0,4)+'.' : acabadoFull;
+
+                // Cada línea tiene versión completa y corta
+                const lines = [
+                    { full: m.modulo,                    short: m.modulo,           size: fs,  weight: 700, color: col.text  },
+                    { full: `${m.l}×${m.a}`,             short: `${m.l}×${m.a}`,   size: fs2, weight: 400, color: '#64748b' },
+                    ...(slot.panelGrosor ? [{ full: `Panel ${slot.panelGrosor}mm`, short: slot.panelGrosor, size: fs2, weight: 400, color: '#94a3b8' }] : []),
+                    { full: tableroFull,                 short: tableroShort,       size: fs2, weight: 400, color: '#94a3b8' },
+                    ...(acabadoFull      ? [{ full: acabadoFull,  short: acabadoShort,  size: fs2, weight: 400, color: '#64748b' }] : []),
+                ];
+
+                // Si todas las líneas caben → versión completa; si no → versión corta
+                const lineH    = fs2 * 1.35;
+                const useShort = sh < lines.length * lineH + 8;
+
+                const startY = sy + sh/2 - (lines.length - 1) * lineH / 2;
+                lines.forEach((ln, i) => {
+                    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+                    Object.entries({ x:sx+sw/2, y:startY + i*lineH,
                         'text-anchor':'middle','dominant-baseline':'middle',
-                        fill:'#64748b','font-size':Math.max(fs*0.65,8),'font-family':'monospace' })
-                        .forEach(([k,v]) => dim.setAttribute(k,v));
-                    dim.textContent = `${m.l}×${m.a}`;
-                    g.appendChild(dim);
+                        fill:ln.color,'font-size':ln.size,'font-weight':ln.weight,'font-family':'monospace' })
+                        .forEach(([k,v]) => t.setAttribute(k,v));
+                    t.textContent = useShort ? ln.short : ln.full;
+                    g.appendChild(t);
+                });
+
+                // Botón rotar (↻) — esquina superior izquierda
+                {
+                    const rg = document.createElementNS('http://www.w3.org/2000/svg','g');
+                    rg.style.cursor = 'pointer';
+                    rg.dataset.nodrag = '1';
+                    rg.addEventListener('mousedown', e => e.stopPropagation());
+                    rg.addEventListener('click', e => {
+                        e.stopPropagation();
+                        // Rotar: intercambiar l y a manteniendo esquina inferior-izquierda fija
+                        const cx = m.x + m.l / 2, cy = m.y + m.a / 2;
+                        const tmp = m.l; m.l = m.a; m.a = tmp;
+                        m.x = cx - m.l / 2; m.y = cy - m.a / 2;
+                        delete adoState.faceMap[m.key]; // adyacencia cambia
+                        adoRender();
+                    });
+                    const rc = document.createElementNS('http://www.w3.org/2000/svg','circle');
+                    Object.entries({ cx:sx+9, cy:sy+9, r:8,
+                        fill:'rgba(99,102,241,0.2)', stroke:'rgba(99,102,241,0.6)','stroke-width':1 })
+                        .forEach(([k,v]) => rc.setAttribute(k,v));
+                    const rt = document.createElementNS('http://www.w3.org/2000/svg','text');
+                    Object.entries({ x:sx+9, y:sy+9.5, 'text-anchor':'middle',
+                        'dominant-baseline':'middle', fill:'#a5b4fc','font-size':11,'font-weight':700 })
+                        .forEach(([k,v]) => rt.setAttribute(k,v));
+                    rt.textContent = '↻';
+                    rg.appendChild(rc); rg.appendChild(rt);
+                    g.appendChild(rg);
                 }
 
                 // Botón eliminar (×) — solo si hay más de 1 módulo
                 if (adoState.placed.length > 1) {
                     const rg = document.createElementNS('http://www.w3.org/2000/svg','g');
                     rg.style.cursor = 'pointer';
+                    rg.dataset.nodrag = '1';
+                    rg.addEventListener('mousedown', e => e.stopPropagation());
                     rg.addEventListener('click', e => { e.stopPropagation(); adoRemoveModule(m.key); });
                     const rc = document.createElementNS('http://www.w3.org/2000/svg','circle');
                     Object.entries({ cx:sx+sw-9, cy:sy+9, r:8,
@@ -4851,7 +4962,7 @@
                     g.appendChild(rg);
                 }
 
-                // Botones (+) en los 4 lados
+                // Botones (+) solo en lados sin módulo vecino
                 if (canAdd) {
                     [
                         { dir:'E', cx:sx+sw+PR+3, cy:sy+sh/2 },
@@ -4859,8 +4970,11 @@
                         { dir:'N', cx:sx+sw/2,    cy:sy-PR-3 },
                         { dir:'S', cx:sx+sw/2,    cy:sy+sh+PR+3 },
                     ].forEach(({ dir, cx, cy }) => {
+                        if (adoHasNeighbor(m, dir)) return; // ya hay módulo en ese lado
                         const pg = document.createElementNS('http://www.w3.org/2000/svg','g');
                         pg.style.cursor = 'pointer';
+                        pg.dataset.nodrag = '1';
+                        pg.addEventListener('mousedown', e => e.stopPropagation());
                         pg.addEventListener('click', e => {
                             e.stopPropagation();
                             adoShowPicker(m.key, dir, cx, cy);
@@ -4880,6 +4994,47 @@
                 }
 
                 svg.appendChild(g);
+            });
+
+            // ── Paredes compartidas — dos líneas independientes por cara ─────
+            const OFS = 3; // desplazamiento px en SVG para separar las dos líneas
+            adoGetWallPairs().forEach(w => {
+                const sx1 = svgX(w.xA), sy1 = svgY(w.yA);
+                const sx2 = svgX(w.xB), sy2 = svgY(w.yB);
+                const midSx = (sx1+sx2)/2, midSy = (sy1+sy2)/2;
+
+                // Coordenadas de cada línea (desplazadas hacia su módulo)
+                let l1, l2;
+                if (w.orient === 'V') {
+                    // key1 cara E → izquierda; key2 cara W → derecha
+                    l1 = { x1:sx1-OFS, y1:sy1, x2:sx2-OFS, y2:sy2 };
+                    l2 = { x1:sx1+OFS, y1:sy1, x2:sx2+OFS, y2:sy2 };
+                } else {
+                    // key1 cara N → abajo SVG (+); key2 cara S → arriba SVG (-)
+                    l1 = { x1:sx1, y1:sy1+OFS, x2:sx2, y2:sy2+OFS };
+                    l2 = { x1:sx1, y1:sy1-OFS, x2:sx2, y2:sy2-OFS };
+                }
+
+                // Color por estado de cada cara
+                const fm = adoState.faceMap;
+                [[l1, w.key1, w.face1],[l2, w.key2, w.face2]].forEach(([coords, key, face]) => {
+                    const st = (fm[key] || {})[face];
+                    const color = st === 'cerrado' ? '#ef4444' : st === 'abierto' ? '#22c55e' : 'rgba(148,163,184,0.4)';
+                    const lw    = st ? 2.5 : 1.5;
+                    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+                    const la = { ...coords, stroke:color, 'stroke-width':lw };
+                    if (!st) la['stroke-dasharray'] = '5,3';
+                    Object.entries(la).forEach(([k,v]) => line.setAttribute(k,v));
+                    svg.appendChild(line);
+                });
+
+                // Área clicable en el centro de la pared
+                const hit = document.createElementNS('http://www.w3.org/2000/svg','line');
+                Object.entries({ x1:sx1, y1:sy1, x2:sx2, y2:sy2, stroke:'transparent','stroke-width':20 })
+                    .forEach(([k,v]) => hit.setAttribute(k,v));
+                hit.style.cursor = 'pointer';
+                hit.addEventListener('click', e => { e.stopPropagation(); adoWallClick(w, midSx, midSy); });
+                svg.appendChild(hit);
             });
 
             // ── Leyenda y subtítulo ──
@@ -4906,6 +5061,7 @@
         }
 
         function adoShowPicker(targetKey, dir, svgCx, svgCy) {
+            adoWallMenuClose();
             adoState.pending = { targetKey, dir };
             const unplaced = adoUnplaced();
 
@@ -4979,7 +5135,9 @@
         function adoRemoveModule(key) {
             if (adoState.placed.length <= 1) return;
             adoState.placed = adoState.placed.filter(p => p.key !== key);
+            delete adoState.faceMap[key];
             adoPickerClose();
+            adoWallMenuClose();
             adoRender();
         }
 
@@ -4999,13 +5157,212 @@
             const minX = Math.min(...adoState.placed.map(p => p.x));
             const minY = Math.min(...adoState.placed.map(p => p.y));
             firstConj.adosamiento = {
-                placed: adoState.placed.map(p => ({ ...p, x: p.x - minX, y: p.y - minY }))
+                placed:  adoState.placed.map(p => ({ ...p, x: p.x - minX, y: p.y - minY })),
+                faceMap: JSON.parse(JSON.stringify(adoState.faceMap)),
             };
 
             saveList(false);
             adoClose();
             renderTable();
         }
+        // ── Drag & drop ───────────────────────────────────────────────────────────
+        function adoHasOverlapWith(m) {
+            return adoState.placed.some(q => {
+                if (q.key === m.key) return false;
+                return m.x < q.x + q.l && m.x + m.l > q.x &&
+                       m.y < q.y + q.a && m.y + m.a > q.y;
+            });
+        }
+
+        // Calcula posición con snap magnético a aristas de otros módulos (+ ADO_GAP)
+        function adoSnapPosition(m, rawX, rawY) {
+            const SNAP = 80; // mm de radio de atracción
+            let bestX = rawX, bestY = rawY, dxBest = SNAP, dyBest = SNAP;
+            adoState.placed.forEach(q => {
+                if (q.key === m.key) return;
+                // Candidatos X: a la derecha de q, a la izquierda de q, alineado izq, alineado der
+                const cx = [q.x + q.l + ADO_GAP, q.x - m.l - ADO_GAP, q.x, q.x + q.l - m.l];
+                cx.forEach(cx => { const d = Math.abs(rawX - cx); if (d < dxBest) { dxBest = d; bestX = cx; } });
+                // Candidatos Y: encima de q, debajo de q, alineado base, alineado tope
+                const cy = [q.y + q.a + ADO_GAP, q.y - m.a - ADO_GAP, q.y, q.y + q.a - m.a];
+                cy.forEach(cy => { const d = Math.abs(rawY - cy); if (d < dyBest) { dyBest = d; bestY = cy; } });
+            });
+            return { x: bestX, y: bestY };
+        }
+
+        function adoDragMove(e) {
+            if (!adoState.dragging) return;
+            const rp = adoState.renderParams;
+            if (!rp) return;
+            const r   = document.getElementById('adoSvg').getBoundingClientRect();
+            const mmX = (e.clientX - r.left - rp.dx) / rp.scale;
+            const mmY = (rp.H - (e.clientY - r.top) - rp.dy) / rp.scale;
+            const rawX = mmX - adoState.dragging.offX;
+            const rawY = mmY - adoState.dragging.offY;
+
+            const p = adoState.placed.find(q => q.key === adoState.dragging.key);
+            if (!p) return;
+
+            const snapped = adoSnapPosition(p, rawX, rawY);
+            p.x = snapped.x;
+            p.y = snapped.y;
+
+            // Detectar módulo sobre el que se está arrastrando (centro del módulo arrastrado dentro del bbox de otro)
+            const cx = p.x + p.l / 2, cy = p.y + p.a / 2;
+            const swapTarget = adoState.placed.find(q =>
+                q.key !== p.key && cx > q.x && cx < q.x + q.l && cy > q.y && cy < q.y + q.a
+            );
+            adoState.dragging.swapTarget = swapTarget ? swapTarget.key : null;
+            adoRender();
+        }
+
+        function adoDragEnd() {
+            if (!adoState.dragging) return;
+            const { key, origX, origY, swapTarget } = adoState.dragging;
+            const p = adoState.placed.find(q => q.key === key);
+            if (p) {
+                if (swapTarget) {
+                    // Intercambiar posiciones
+                    const swapMod = adoState.placed.find(q => q.key === swapTarget);
+                    if (swapMod) {
+                        const sx = swapMod.x, sy = swapMod.y;
+                        swapMod.x = origX; swapMod.y = origY;
+                        p.x = sx;         p.y = sy;
+                        // Limpiar faceMaps de ambos (adyacencia cambió)
+                        delete adoState.faceMap[p.key];
+                        delete adoState.faceMap[swapMod.key];
+                    }
+                } else if (adoHasOverlapWith(p)) {
+                    // Solapamiento sin swap → revertir
+                    p.x = origX;
+                    p.y = origY;
+                } else if (p.x !== origX || p.y !== origY) {
+                    // Movido sin solapamiento → limpiar cara (adyacencia cambió)
+                    delete adoState.faceMap[p.key];
+                }
+            }
+            adoState.dragging = null;
+            adoRender();
+        }
+
+        // ── Detectar vecino en una dirección ──────────────────────────────────────
+        function adoHasNeighbor(m, dir) {
+            const EPS = 8;
+            return adoState.placed.some(q => {
+                if (q.key === m.key) return false;
+                const yOvlp = q.y < m.y + m.a - EPS && q.y + q.a > m.y + EPS;
+                const xOvlp = q.x < m.x + m.l - EPS && q.x + q.l > m.x + EPS;
+                switch (dir) {
+                    case 'E': return Math.abs(q.x          - (m.x + m.l + ADO_GAP)) < EPS && yOvlp;
+                    case 'W': return Math.abs((q.x + q.l)  - (m.x - ADO_GAP))       < EPS && yOvlp;
+                    case 'N': return Math.abs(q.y          - (m.y + m.a + ADO_GAP)) < EPS && xOvlp;
+                    case 'S': return Math.abs((q.y + q.a)  - (m.y - ADO_GAP))       < EPS && xOvlp;
+                }
+                return false;
+            });
+        }
+
+        // ── Obtener todas las paredes compartidas ─────────────────────────────────
+        function adoGetWallPairs() {
+            const walls = [], EPS = 8, placed = adoState.placed;
+            for (let i = 0; i < placed.length; i++) {
+                for (let j = i+1; j < placed.length; j++) {
+                    const a = placed[i], b = placed[j];
+                    const yOvlp = Math.min(a.y+a.a, b.y+b.a) - Math.max(a.y, b.y);
+                    const xOvlp = Math.min(a.x+a.l, b.x+b.l) - Math.max(a.x, b.x);
+                    if (Math.abs(b.x - (a.x+a.l+ADO_GAP)) < EPS && yOvlp > EPS) {
+                        // b al Este de a
+                        const xM = a.x+a.l+ADO_GAP/2;
+                        walls.push({ key1:a.key, key2:b.key, face1:'E', face2:'W', orient:'V',
+                            xA:xM, yA:Math.max(a.y,b.y), xB:xM, yB:Math.min(a.y+a.a,b.y+b.a) });
+                    } else if (Math.abs(a.x - (b.x+b.l+ADO_GAP)) < EPS && yOvlp > EPS) {
+                        // a al Este de b
+                        const xM = b.x+b.l+ADO_GAP/2;
+                        walls.push({ key1:b.key, key2:a.key, face1:'E', face2:'W', orient:'V',
+                            xA:xM, yA:Math.max(a.y,b.y), xB:xM, yB:Math.min(a.y+a.a,b.y+b.a) });
+                    } else if (Math.abs(b.y - (a.y+a.a+ADO_GAP)) < EPS && xOvlp > EPS) {
+                        // b al Norte de a
+                        const yM = a.y+a.a+ADO_GAP/2;
+                        walls.push({ key1:a.key, key2:b.key, face1:'N', face2:'S', orient:'H',
+                            xA:Math.max(a.x,b.x), yA:yM, xB:Math.min(a.x+a.l,b.x+b.l), yB:yM });
+                    } else if (Math.abs(a.y - (b.y+b.a+ADO_GAP)) < EPS && xOvlp > EPS) {
+                        // a al Norte de b
+                        const yM = b.y+b.a+ADO_GAP/2;
+                        walls.push({ key1:b.key, key2:a.key, face1:'N', face2:'S', orient:'H',
+                            xA:Math.max(a.x,b.x), yA:yM, xB:Math.min(a.x+a.l,b.x+b.l), yB:yM });
+                    }
+                }
+            }
+            return walls;
+        }
+
+        // ── Menú de pared — dos filas independientes ──────────────────────────────
+        function adoWallClick(w, svgCx, svgCy) {
+            adoPickerClose();
+            adoState.pendingWall = w;
+            const m1 = adoState.placed.find(p => p.key === w.key1);
+            const m2 = adoState.placed.find(p => p.key === w.key2);
+            const fm = adoState.faceMap;
+
+            function faceRow(key, face, mod) {
+                const st = (fm[key] || {})[face];
+                const btnBase = 'border-radius:4px;padding:4px 7px;cursor:pointer;font-size:11px;font-weight:700;font-family:monospace;border:1px solid';
+                const rBtn = (type, label, color, bg) =>
+                    `<button onclick="adoSetFace('${key}','${face}','${type}')"
+                        style="${btnBase} ${color};background:${bg};color:${color.replace('border:','')};
+                        outline:${st===type?'2px solid '+color.split(';')[0].trim():'none'};outline-offset:1px;"
+                        onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">${label}</button>`;
+                const delBtn = st ? `<button onclick="adoSetFace('${key}','${face}',null)"
+                        style="${btnBase} #334155;background:transparent;color:#64748b;"
+                        onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">✕</button>` : '';
+                return `<div style="margin-bottom:8px;">
+                    <div style="font-size:10px;color:#94a3b8;margin-bottom:4px;">
+                        <span style="font-weight:700;color:#e2e8f0;">${mod ? mod.modulo : '?'}</span>
+                        &nbsp;cara&nbsp;<b>${face}</b>
+                        ${st ? `&nbsp;<span style="color:${st==='cerrado'?'#ef4444':'#22c55e'}">${st.toUpperCase()}</span>` : ''}
+                    </div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                        ${rBtn('cerrado','● CERRADO','#ef4444','rgba(239,68,68,0.12)')}
+                        ${rBtn('abierto','● ABIERTO','#22c55e','rgba(34,197,94,0.12)')}
+                        ${delBtn}
+                    </div>
+                </div>`;
+            }
+
+            document.getElementById('adoWallMenu').innerHTML =
+                `<div style="font-size:10px;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Cara compartida</div>
+                 ${faceRow(w.key1, w.face1, m1)}
+                 ${faceRow(w.key2, w.face2, m2)}
+                 <button onclick="adoWallMenuClose()" style="margin-top:4px;width:100%;background:transparent;border:1px solid #1e293b;border-radius:4px;color:#475569;font-size:11px;padding:4px;cursor:pointer;">Cerrar</button>`;
+
+            // Posicionar cerca del clic
+            const wrap = document.getElementById('adoCanvasWrap');
+            const svg  = document.getElementById('adoSvg');
+            const vb   = svg.getAttribute('viewBox').split(' ').map(Number);
+            const sr   = svg.getBoundingClientRect();
+            const wr   = wrap.getBoundingClientRect();
+            const px   = (svgCx / vb[2]) * sr.width  + (sr.left - wr.left);
+            const py   = (svgCy / vb[3]) * sr.height + (sr.top  - wr.top);
+            const menu = document.getElementById('adoWallMenu');
+            menu.style.display = 'block';
+            menu.style.left = Math.min(px + 10, wrap.clientWidth - 220) + 'px';
+            menu.style.top  = Math.max(py - 60, 5) + 'px';
+        }
+
+        function adoSetFace(key, face, type) {
+            if (!adoState.faceMap[key]) adoState.faceMap[key] = {};
+            if (type === null) delete adoState.faceMap[key][face];
+            else               adoState.faceMap[key][face] = type;
+            adoWallMenuClose();
+            adoRender();
+        }
+
+        function adoWallMenuClose() {
+            const m = document.getElementById('adoWallMenu');
+            if (m) m.style.display = 'none';
+            adoState.pendingWall = null;
+        }
+
         // ════════════════════════════════════════════════════════════════════════════
 
     </script>
@@ -5031,6 +5388,8 @@
                     <div id="adoPickerList"></div>
                     <button onclick="adoPickerClose()" style="margin-top:6px;width:100%;background:transparent;border:1px solid #334155;border-radius:4px;color:#64748b;font-size:11px;padding:4px;cursor:pointer;">Cancelar</button>
                 </div>
+                <!-- Wall menu popup (contenido dinámico) -->
+                <div id="adoWallMenu" style="display:none;position:absolute;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px;z-index:21;min-width:215px;box-shadow:0 8px 32px rgba(0,0,0,0.6);"></div>
             </div>
         </div>
         <!-- Leyenda -->

@@ -13,7 +13,7 @@ from .limpiar      import limpiar_modulo
 from .dxf_utils    import cota_h, cota_v, _attribs
 from .plano_base   import (insertar_pilares, dibujar_carriles,
                            dibujar_alzado_base, dibujar_alzado_base_v,
-                           dibujar_fleje, TABLERO_LARGO)
+                           dibujar_fleje, dibujar_fleje_v, TABLERO_LARGO)
 from .seccion_ancho import dibujar_seccion_ancho, dibujar_seccion_abajo
 from .bloques      import dibujar_bloques_recuadros
 
@@ -376,37 +376,40 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
                             n_full -= 1; partial = span - n_full * tablero_m
                         first = y_ti + partial / 2.0
                         if partial / 2.0 > 1:
-                            cota_v(msp, doc, x0_m, y_ti, x0_m, first, x0_m-OFS_TAB, 'PMP-T-50', suffix=tipo_m)
+                            cota_v(msp, doc, x0_m, y_ti, x0_m, first, x0_m-OFS_TAB-20, 'PMP-T-50', suffix=tipo_m)
                         for i in range(n_full):
-                            cota_v(msp, doc, x0_m, first+i*tablero_m, x0_m, first+(i+1)*tablero_m, x0_m-OFS_TAB, 'PMP-T-50', suffix=tipo_m)
+                            cota_v(msp, doc, x0_m, first+i*tablero_m, x0_m, first+(i+1)*tablero_m, x0_m-OFS_TAB-20, 'PMP-T-50', suffix=tipo_m)
                         last = first + n_full * tablero_m
                         if y_tf - last > 1:
-                            cota_v(msp, doc, x0_m, last, x0_m, y_tf, x0_m-OFS_TAB, 'PMP-T-50', suffix=tipo_m)
+                            cota_v(msp, doc, x0_m, last, x0_m, y_tf, x0_m-OFS_TAB-20, 'PMP-T-50', suffix=tipo_m)
                     else:
                         y_t = y_ti
                         while y_t < y_tf:
                             fin = min(y_t + tablero_m, y_tf)
-                            cota_v(msp, doc, x0_m, y_t, x0_m, fin, x0_m-OFS_TAB, 'PMP-T-50', suffix=tipo_m)
+                            cota_v(msp, doc, x0_m, y_t, x0_m, fin, x0_m-OFS_TAB-20, 'PMP-T-50', suffix=tipo_m)
                             y_t += tablero_m
                 else:
-                    cota_v(msp, doc, x0_m, y_ti, x0_m, y_tf, x0_m-OFS_TAB, 'PMP-T-50', suffix=tipo_m)
+                    cota_v(msp, doc, x0_m, y_ti, x0_m, y_tf, x0_m-OFS_TAB-20, 'PMP-T-50', suffix=tipo_m)
+
+        # Cota total A (izquierda) — solo columna más a la izquierda
+        # span del tablero siempre en ancho_m (X para rotado, Y para no rotado)
+        span_tab_m = ancho_m - 2 * (CARRIL_OFS_H_Y + g_car_m)
+        hay_fleje_m = span_tab_m > TABLERO_LARGO.get(tipo_m, 2440)
 
         # Cota total L (arriba) — todos los top
         # Para módulos rotados la cota queda más cerca (no hay alzado encima)
-        ofs_tot_m = 250 if rotado_m else OFS_TOT
+        ofs_tot_m = (580 if hay_fleje_m else 300) if rotado_m else OFS_TOT
         if is_top:
             cota_h(msp, doc, x0_m, y1_m, x1_m, y1_m, y1_m + ofs_tot_m, 'PMP-T-60')
-
-        # Cota total A (izquierda) — solo columna más a la izquierda
-        # Para rotados: el span del tablero va en Y (largo_m), usando CARRIL_OFS_V_X (=40, igual que H_Y)
-        span_tab_m = (largo_m if rotado_m else ancho_m) - 2 * (CARRIL_OFS_H_Y + g_car_m)
-        hay_fleje_m = span_tab_m > TABLERO_LARGO.get(tipo_m, 2440)
         if is_left:
             ofs_cota_a = (OFS_IZQ + OFS_TAB + 100) if rotado_m else (OFS_IZQ + 200 if hay_fleje_m else OFS_IZQ)
             cota_v(msp, doc, x0_m, y0_m, x0_m, y1_m, x0_m - ofs_cota_a, 'PMP-T-60')
-            if hay_fleje_m:
-                dibujar_fleje(msp, doc, x0_m, y0_m, x1_m, y1_m, g_car_m, tipo_m,
-                              x_cota=x0_m - OFS_IZQ + 110)
+        if hay_fleje_m and not rotado_m:
+            dibujar_fleje(msp, doc, x0_m, y0_m, x1_m, y1_m, g_car_m, tipo_m,
+                          x_cota=x0_m - OFS_IZQ + 110, draw_cotas=is_left)
+        if hay_fleje_m and rotado_m and is_top:
+            dibujar_fleje_v(msp, doc, x0_m, y0_m, x1_m, y1_m, g_car_m, tipo_m,
+                            y_cota=y1_m + OFS_TAB)
 
         # Alzado base:
         #   - No rotado: encima del módulo (cara larga = top), solo para is_top

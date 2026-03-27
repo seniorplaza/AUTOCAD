@@ -212,7 +212,7 @@ def dibujar_zona_derecha(msp, x0, y0, x1, y1, g_carril, A):
 
 # ─── FLEJE FIBROCEMENTO ───────────────────────────────────────────────────────
 
-def dibujar_fleje(msp, doc, x0, y0, x1, y1, g_carril, tipo_tablero, x_cota):
+def dibujar_fleje(msp, doc, x0, y0, x1, y1, g_carril, tipo_tablero, x_cota, draw_cotas=True):
     """
     Dibuja el fleje horizontal cuando A > largo del tablero.
     Aplica a los 3 tipos: Hidrófugo (2440), Fenólico (2500), Fibrocemento (2600).
@@ -238,12 +238,41 @@ def dibujar_fleje(msp, doc, x0, y0, x1, y1, g_carril, tipo_tablero, x_cota):
     # Bordes interiores de los carriles horizontales
     y_car_bot = y0 + CARRIL_OFS_H_Y + g_carril
     y_car_top = y1 - CARRIL_OFS_H_Y - g_carril
-    # Cota tablero superior (fleje → carril_top) con tipo de tablero como sufijo
-    cota_v(msp, doc, x0, fleje_y,   x0, y_car_top, x_cota, 'PMP-T-60', suffix=tipo_tablero)
-    # Cota pieza inferior (carril_bot → fleje) sin sufijo
-    cota_v(msp, doc, x0, y_car_bot, x0, fleje_y,   x_cota, 'PMP-T-60')
+    if draw_cotas:
+        # Cota tablero superior (fleje → carril_top) con tipo de tablero como sufijo
+        cota_v(msp, doc, x0, fleje_y,   x0, y_car_top, x_cota, 'PMP-T-60', suffix=tipo_tablero)
+        # Cota pieza inferior (carril_bot → fleje) sin sufijo
+        cota_v(msp, doc, x0, y_car_bot, x0, fleje_y,   x_cota, 'PMP-T-60')
     pieza_inf = fleje_y - y_car_bot
     print(f"  Fleje {tipo_tablero}: y={fleje_y:.1f}  tablero={largo}mm  pieza_inf={pieza_inf:.0f}mm")
+
+
+def dibujar_fleje_v(msp, doc, x0, y0, x1, y1, g_carril, tipo_tablero, y_cota):
+    """
+    Dibuja el fleje VERTICAL cuando L (X span) > largo del tablero (módulo rotado).
+    Posición: fleje_x = x1 - CARRIL_OFS_V_X - g_carril - largo_tablero
+    Cotas horizontales arriba en la cara corta (N).
+    """
+    largo = TABLERO_LARGO.get(tipo_tablero, 2440)
+    fleje_x = x0 + CARRIL_OFS_V_X + g_carril + largo
+    # Banda roja vertical
+    _pl = msp.add_lwpolyline(
+        [(fleje_x, y0), (fleje_x, y1)],
+        dxfattribs={'layer': 'CORREAS', 'color': 1})
+    _pl.dxf.const_width = 100
+    # Línea de eje trazo-y-punto
+    _dash = msp.add_lwpolyline(
+        [(fleje_x, y0), (fleje_x, y1)],
+        dxfattribs={'layer': 'CORREAS', 'linetype': 'TRAZOS2', 'ltscale': 10})
+    _dash.dxf.true_color = (189 << 16) | (142 << 8) | 0  # = 12422656
+    # Bordes interiores carriles verticales
+    x_car_lft = x0 + CARRIL_OFS_V_X + g_carril
+    x_car_rgt = x1 - CARRIL_OFS_V_X - g_carril
+    # Cota tablero izquierdo (carril_lft → fleje) con tipo como sufijo
+    cota_h(msp, doc, x_car_lft, y1, fleje_x,   y1, y_cota, 'PMP-T-60', suffix=tipo_tablero)
+    # Cota pieza derecha (fleje → carril_rgt) sin sufijo
+    cota_h(msp, doc, fleje_x,   y1, x_car_rgt, y1, y_cota, 'PMP-T-60')
+    print(f"  FlejeV {tipo_tablero}: x={fleje_x:.1f}  tablero={largo}mm  pieza_rgt={x_car_rgt-fleje_x:.0f}mm")
 
 
 # ─── TEXTOS DENTRO DEL MÓDULO ─────────────────────────────────────────────────

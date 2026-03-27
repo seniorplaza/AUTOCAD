@@ -163,17 +163,18 @@ def dibujar_seccion_abajo(msp, doc, x0, y0, x1, y1, hbase, g_carril, tipo_tabler
     def _poly(pts_xy, layer, color=256):
         msp.add_lwpolyline(pts_xy, close=True, dxfattribs={'layer': layer, 'color': color})
 
-    # Tablero (amarillo) — franja horizontal
-    _poly([(x0+tab_lft, rect_y+0.0028),
-           (x1-tab_rgt, rect_y+0.0028),
-           (x1-tab_rgt, rect_y+0.0028+grosor_t),
-           (x0+tab_lft, rect_y+0.0028+grosor_t)], 'Cotas', 2)
+    # Tablero (amarillo) — franja horizontal (+0.1294 para fenólico)
+    _tab_ofs = 0.0028 + (0.1294 if es_fen else 0.0)
+    _poly([(x0+tab_lft, rect_y+_tab_ofs),
+           (x1-tab_rgt, rect_y+_tab_ofs),
+           (x1-tab_rgt, rect_y+_tab_ofs+grosor_t),
+           (x0+tab_lft, rect_y+_tab_ofs+grosor_t)], 'Cotas', 2)
 
-    # Correa (cian) — empieza justo debajo del tablero
-    _poly([(x0+cor_ofs, rect_y-grosor_t+17.0028),
-           (x1-cor_ofs, rect_y-grosor_t+17.0028),
-           (x1-cor_ofs, rect_y-grosor_t+17.0028-cor_w),
-           (x0+cor_ofs, rect_y-grosor_t+17.0028-cor_w)], 'CORREAS', 4)
+    # Correa (cian) — 2mm debajo de rect_y (igual que rect_x+2 en seccion_ancho)
+    _poly([(x0+cor_ofs, rect_y - 2),
+           (x1-cor_ofs, rect_y - 2),
+           (x1-cor_ofs, rect_y - 2 - cor_w),
+           (x0+cor_ofs, rect_y - 2 - cor_w)], 'CORREAS', 4)
 
     # Perfiles desde VARIACIONES — izquierdo y derecho
     result = _perfil_seccion(doc, L, g_carril, base, hbase)

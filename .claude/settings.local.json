@@ -4,7 +4,12 @@
       "Bash(python -:*)",
       "Bash(python -c \"import modificar_modulo; print\\(''OK''\\)\")",
       "Bash(python3:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(python -c \"import matplotlib; import numpy; print\\(''OK''\\)\")",
+      "Bash(pip install:*)",
+      "Bash(python render_perspectiva.py)",
+      "Bash(python -c \"import ezdxf; print\\(''ezdxf OK''\\)\")",
+      "Bash(python extraer_perfiles.py)"
     ]
   }
 }

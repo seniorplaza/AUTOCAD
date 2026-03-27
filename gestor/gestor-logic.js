@@ -14,7 +14,7 @@
         function debounce(fn, delay) {
             let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
         }
-        const debouncedRenderTable = debounce(renderTable, 200);
+        const debouncedRenderTable = debounce(() => renderTable(), 200);
 
 // ═══ PERFILADO ═══════════════════════════════════════════════════════════════
         // Función para toggle del menú de perfilado

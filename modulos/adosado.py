@@ -251,13 +251,6 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
                     if raw_face_map.get(p['key'], {}).get('S') != 'cerrado':
                         skip_carriles_map.setdefault(p['key'], set()).add('S')
 
-    # skip_section_map: solo caras explícitamente 'abierto' en faceMap
-    # (controla la extensión del tablero en la sección — igual que antes)
-    skip_section_map = {}
-    for key, faces in raw_face_map.items():
-        for face, ftype in faces.items():
-            if ftype == 'abierto':
-                skip_section_map.setdefault(key, set()).add(face)
 
     # ── Series por módulo (modulo_label → lista de nº serie) ─────────────────
     serie_nums = {}
@@ -265,6 +258,12 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
         mod = _cf(fila, 'modulo') or 'M1'
         if mod not in serie_nums:
             serie_nums[mod] = _parse_series(_cf(fila, 'serie'))
+
+    # Caras exteriores explícitamente 'abierto' → también sin carril
+    for key, faces in raw_face_map.items():
+        for face, ftype in faces.items():
+            if ftype == 'abierto':
+                skip_carriles_map.setdefault(key, set()).add(face)
 
     # ── Dibujar cada módulo ───────────────────────────────────────────────────
     modulos_info = []   # guardamos info por módulo para cotas totales
@@ -399,12 +398,13 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
             cota_h(msp, doc, x0_m, y1_m, x1_m, y1_m, y1_m + ofs_tot_m, 'PMP-T-60')
 
         # Cota total A (izquierda) — solo columna más a la izquierda
-        hay_fleje_m = (ancho_m - 2*(CARRIL_OFS_H_Y + g_car_m)) > TABLERO_LARGO.get(tipo_m, 2440)
+        # Para rotados: el span del tablero va en Y (largo_m), usando CARRIL_OFS_V_X (=40, igual que H_Y)
+        span_tab_m = (largo_m if rotado_m else ancho_m) - 2 * (CARRIL_OFS_H_Y + g_car_m)
+        hay_fleje_m = span_tab_m > TABLERO_LARGO.get(tipo_m, 2440)
         if is_left:
-            # Para rotados: empujar A cota más lejos para que no solape con las de tablero
             ofs_cota_a = (OFS_IZQ + OFS_TAB + 100) if rotado_m else (OFS_IZQ + 200 if hay_fleje_m else OFS_IZQ)
             cota_v(msp, doc, x0_m, y0_m, x0_m, y1_m, x0_m - ofs_cota_a, 'PMP-T-60')
-            if hay_fleje_m and not rotado_m:
+            if hay_fleje_m:
                 dibujar_fleje(msp, doc, x0_m, y0_m, x1_m, y1_m, g_car_m, tipo_m,
                               x_cota=x0_m - OFS_IZQ + 110)
 
@@ -426,11 +426,11 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
         if not rotado_m and is_right:
             dibujar_seccion_ancho(msp, doc, x0_m, y0_m, x1_m, y1_m,
                                   hbase_d, g_car_m, tipo_m, largo_m, base_m,
-                                  skip_faces=skip_section_map.get(p['key']))
+                                  skip_faces=skip_carriles_map.get(p['key']))
         if rotado_m and is_bottom:
             dibujar_seccion_abajo(msp, doc, x0_m, y0_m, x1_m, y1_m,
                                   hbase_d, g_car_m, tipo_m, largo_m, base_m,
-                                  skip_faces=skip_section_map.get(p['key']))
+                                  skip_faces=skip_carriles_map.get(p['key']))
 
         # Bloques centrados en cada módulo: Nº serie + tablero+suelo
         cx_m = (x0_m + x1_m) / 2.0

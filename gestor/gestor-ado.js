@@ -45,6 +45,7 @@
             pending:      null,  // {targetKey, dir} — esperando selección de módulo
             faceMap:      {},    // {key: {face: 'cerrado'|'abierto'}}
             pendingWall:  null,  // wall pair activo en el menú
+            pendingExtFace: null, // {key, face, svgCx, svgCy} — cara exterior activa
             dragging:     null,  // {key, offX, offY, origX, origY} — drag en curso
             renderParams: null,  // {scale, dx, dy, W, H} — última renderización
             zoom:         1,     // factor de zoom del canvas
@@ -443,6 +444,36 @@
                 hit.style.cursor = 'pointer';
                 hit.addEventListener('click', e => { e.stopPropagation(); adoWallClick(w, midSx, midSy); });
                 svg.appendChild(hit);
+            });
+
+            // ── Caras exteriores (sin módulo vecino) — default ROJO ───────────
+            adoState.placed.forEach(m => {
+                if (adoState.dragging && adoState.dragging.key === m.key) return;
+                const fm = adoState.faceMap;
+                const OFS = 2; // px interior para no solapar con borde del rect
+                [
+                    { face:'S', x1:svgX(m.x),     y1:svgY(m.y)+OFS,     x2:svgX(m.x+m.l), y2:svgY(m.y)+OFS     },
+                    { face:'N', x1:svgX(m.x),     y1:svgY(m.y+m.a)-OFS, x2:svgX(m.x+m.l), y2:svgY(m.y+m.a)-OFS },
+                    { face:'W', x1:svgX(m.x)+OFS,     y1:svgY(m.y+m.a), x2:svgX(m.x)+OFS,     y2:svgY(m.y)     },
+                    { face:'E', x1:svgX(m.x+m.l)-OFS, y1:svgY(m.y+m.a), x2:svgX(m.x+m.l)-OFS, y2:svgY(m.y)     },
+                ].forEach(({ face, x1, y1, x2, y2 }) => {
+                    if (adoHasNeighbor(m, face)) return; // cara compartida: ya la maneja adoGetWallPairs
+                    const st = (fm[m.key] || {})[face];
+                    const eff = st !== undefined ? st : 'cerrado'; // exterior default = ROJO
+                    const color = eff === 'cerrado' ? '#ef4444' : '#22c55e';
+                    const ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+                    const la = { x1, y1, x2, y2, stroke:color, 'stroke-width':2.5 };
+                    if (eff === 'abierto') la['stroke-dasharray'] = '5,3';
+                    Object.entries(la).forEach(([k,v]) => ln.setAttribute(k,v));
+                    svg.appendChild(ln);
+                    const midX = (x1+x2)/2, midY = (y1+y2)/2;
+                    const hitL = document.createElementNS('http://www.w3.org/2000/svg','line');
+                    Object.entries({ x1, y1, x2, y2, stroke:'transparent','stroke-width':16 })
+                        .forEach(([k,v]) => hitL.setAttribute(k,v));
+                    hitL.style.cursor = 'pointer';
+                    hitL.addEventListener('click', e => { e.stopPropagation(); adoExtFaceClick(m.key, face, midX, midY); });
+                    svg.appendChild(hitL);
+                });
             });
 
             // ── Cotas de cada módulo ──────────────────────────────────────────
@@ -863,13 +894,65 @@
                      ${faceRow(w.key1, w.face1, m1)}
                      ${faceRow(w.key2, w.face2, m2)}
                      <button onclick="adoWallMenuClose()" style="margin-top:4px;width:100%;background:transparent;border:1px solid #1e293b;border-radius:4px;color:#475569;font-size:11px;padding:4px;cursor:pointer;">Cerrar</button>`;
+            } else if (adoState.pendingExtFace) {
+                const { key, face, svgCx, svgCy } = adoState.pendingExtFace;
+                _adoExtFaceMenuRender(key, face, svgCx, svgCy);
             }
+        }
+
+        function adoExtFaceClick(key, face, svgCx, svgCy) {
+            adoPickerClose();
+            adoWallMenuClose();
+            adoState.pendingExtFace = { key, face, svgCx, svgCy };
+            _adoExtFaceMenuRender(key, face, svgCx, svgCy);
+        }
+
+        function _adoExtFaceMenuRender(key, face, svgCx, svgCy) {
+            const m = adoState.placed.find(p => p.key === key);
+            if (!m) return;
+            const st  = (adoState.faceMap[key] || {})[face];
+            const eff = st !== undefined ? st : 'cerrado';
+            const btnBase = 'border-radius:4px;padding:4px 7px;cursor:pointer;font-size:11px;font-weight:700;font-family:monospace;border:1px solid';
+            const rBtn = (type, label, color, bg) =>
+                `<button onclick="adoSetFace('${key}','${face}','${type}')"
+                    style="${btnBase} ${color};background:${bg};color:${color};
+                    outline:${eff===type?'2px solid '+color:'none'};outline-offset:1px;"
+                    onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">${label}</button>`;
+            const delBtn = st !== undefined
+                ? `<button onclick="adoSetFace('${key}','${face}',null)"
+                    style="${btnBase} #334155;background:transparent;color:#64748b;"
+                    onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">✕ Reset</button>` : '';
+            const menu = document.getElementById('adoWallMenu');
+            menu.innerHTML =
+                `<div style="font-size:10px;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Cara exterior</div>
+                 <div style="margin-bottom:8px;">
+                   <div style="font-size:10px;color:#94a3b8;margin-bottom:4px;">
+                     <span style="font-weight:700;color:#e2e8f0;">${m.modulo}</span>&nbsp;cara&nbsp;<b>${face}</b>
+                     &nbsp;<span style="color:${eff==='cerrado'?'#ef4444':'#22c55e'}">${eff.toUpperCase()}</span>
+                   </div>
+                   <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                     ${rBtn('cerrado','● CERRADO','#ef4444','rgba(239,68,68,0.12)')}
+                     ${rBtn('abierto','● ABIERTO','#22c55e','rgba(34,197,94,0.12)')}
+                     ${delBtn}
+                   </div>
+                 </div>
+                 <button onclick="adoWallMenuClose()" style="margin-top:4px;width:100%;background:transparent;border:1px solid #1e293b;border-radius:4px;color:#475569;font-size:11px;padding:4px;cursor:pointer;">Cerrar</button>`;
+            const wrap = document.getElementById('adoCanvasWrap');
+            const svg  = document.getElementById('adoSvg');
+            const vb   = svg.getAttribute('viewBox').split(' ').map(Number);
+            const sr   = svg.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+            const px   = (svgCx / vb[2]) * sr.width  + (sr.left - wr.left);
+            const py   = (svgCy / vb[3]) * sr.height + (sr.top  - wr.top);
+            menu.style.display = 'block';
+            menu.style.left = Math.min(px + 10, wrap.clientWidth - 220) + 'px';
+            menu.style.top  = Math.max(py - 60, 5) + 'px';
         }
 
         function adoWallMenuClose() {
             const m = document.getElementById('adoWallMenu');
             if (m) m.style.display = 'none';
             adoState.pendingWall = null;
+            adoState.pendingExtFace = null;
         }
 
 // ── Helpers de cotas SVG ─────────────────────────────────────────────────────

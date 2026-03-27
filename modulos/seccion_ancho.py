@@ -88,9 +88,10 @@ def dibujar_seccion_ancho(msp, doc, x0, y0, x1, y1, hbase, g_carril, tipo_tabler
     profile_w = g_carril + 65
     rect_x    = x1 + DX_PROF - (0.1322 if es_fibro else 0.0)
     _skip     = skip_faces or set()
-    # CERRADO (no en skip) → tablero tapa el carril → extender 85mm hacia ese lado
-    tab_bot = tab_ofs - (85 if 'S' not in _skip else 0)
-    tab_top = tab_ofs - (85 if 'N' not in _skip else 0)
+    # Sin carril (verde / en skip) → tablero llega al borde (tab=0)
+    # Con carril (rojo / no en skip) → tablero se queda en posición normal (tab=tab_ofs)
+    tab_bot = 0 if 'S' in _skip else tab_ofs
+    tab_top = 0 if 'N' in _skip else tab_ofs
 
     def _poly(pts_xy, layer, color=256):
         msp.add_lwpolyline(pts_xy, close=True, dxfattribs={'layer': layer, 'color': color})
@@ -152,9 +153,12 @@ def dibujar_seccion_abajo(msp, doc, x0, y0, x1, y1, hbase, g_carril, tipo_tabler
     profile_w = g_carril + 65
     rect_y    = y0 - DY_PROF   # borde superior zona sección (justo debajo del módulo)
     _skip     = skip_faces or set()
-    # CERRADO (no en skip) → tablero tapa el carril → extender 85mm hacia ese lado
-    tab_lft = tab_ofs - (85 if 'E' not in _skip else 0)
-    tab_rgt = tab_ofs - (85 if 'W' not in _skip else 0)
+    # Sin carril (verde / en skip) → tablero llega al borde (tab=0)
+    # Con carril (rojo / no en skip) → tablero se queda en posición normal (tab=tab_ofs)
+    # Lado izquierdo de la sección (x0) = cara W del módulo
+    # Lado derecho de la sección (x1)  = cara E del módulo
+    tab_lft = 0 if 'W' in _skip else tab_ofs
+    tab_rgt = 0 if 'E' in _skip else tab_ofs
 
     def _poly(pts_xy, layer, color=256):
         msp.add_lwpolyline(pts_xy, close=True, dxfattribs={'layer': layer, 'color': color})

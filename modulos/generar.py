@@ -254,11 +254,16 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
     # 9. Pilares al final → draw order encima de todo
     insertar_pilares(msp, x0, y0, x1, y1, bloque_pil)
 
-    # 10. Vista inicial centrada en el marco A3
+    # 10. Vista inicial centrada en el marco A3 general
     cx_view = (MARCO_X0 + MARCO_X1) / 2.0
     cy_view = (MARCO_Y0 + MARCO_Y1) / 2.0
-    doc.set_modelspace_vport(height=marco_h * 1.05, center=(cx_view, cy_view))
+    doc.set_modelspace_vport(height=marco_h * 2.5, center=(cx_view, cy_view - marco_h/2))
 
-    # 11. Guardar
+    # 11. PLANO DE CUBIERTA
+    from .cubierta import dibujar_estructura_cubierta
+    Y_CUBIERTA = MARCO_Y0 - marco_h - 2000  # Espacio entre planos
+    dibujar_estructura_cubierta(msp, doc, fila, Y_CUBIERTA)
+
+    # 12. Guardar
     doc.saveas(ruta_salida)
     print(f"  Guardado: {ruta_salida}")

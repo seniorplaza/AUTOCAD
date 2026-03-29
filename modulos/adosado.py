@@ -8,7 +8,7 @@ import ezdxf
 from ezdxf.enums import TextEntityAlignment
 
 from .config       import COL, CARRIL_OFS_V_X, CARRIL_OFS_H_Y
-from .calculos     import calc_hbase, nombre_bloque_pilar, grosor_carril, calc_correas, hex_a_ral
+from .calculos     import calc_hbase, nombre_bloque_pilar, grosor_carril, calc_correas, hex_a_ral, calc_hcubierta
 from .limpiar      import limpiar_modulo
 from .dxf_utils    import cota_h, cota_v, _attribs
 from .plano_base   import (insertar_pilares, dibujar_carriles,
@@ -504,7 +504,29 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
     # ── Vista inicial ─────────────────────────────────────────────────────────
     cx_view = (MARCO_X0 + MARCO_X1) / 2.0
     cy_view = (MARCO_Y0 + MARCO_Y1) / 2.0
-    doc.set_modelspace_vport(height=marco_h * 1.05, center=(cx_view, cy_view))
+    doc.set_modelspace_vport(height=marco_h * 1.5, center=(cx_view, cy_view - marco_h/2))
+
+    # ── PLANO DE CUBIERTA (Uno por cada tipo de módulo diferente) ────────────
+    from .cubierta import dibujar_estructura_cubierta
+    tipos_cubierta = {} # {(L, A, hcub): fila}
+    for fila in filas_conj:
+        L_f = int(_cf(fila, 'l') or 6000)
+        A_f = int(_cf(fila, 'a') or 2350)
+        base_f = _cf(fila, 'base')
+        panel_f = _cf(fila, 'panelGrosor')
+        hcub_f = calc_hcubierta(L_f, A_f, base_f, panel_f, _cf(fila, 'cubierta'))
+        key = (L_f, A_f, hcub_f)
+        if key not in tipos_cubierta:
+            tipos_cubierta[key] = fila
+    
+    y_curr_cub = MARCO_Y0 - 2000
+    for key, fila_c in tipos_cubierta.items():
+        # Estimamos un marco_h aproximado para el posicionamiento inicial, 
+        # el dibujo real se auto-posiciona según se le pase MARCO_Y0.
+        # dibujar_estructura_cubierta internamente calcula su propio marco_h y retorna su valor.
+        # Usamos un valor base suficientemente grande para el primer desplazamiento.
+        h_plan = dibujar_estructura_cubierta(msp, doc, fila_c, y_curr_cub - 5000)
+        y_curr_cub -= (h_plan + 2000)
 
     doc.saveas(ruta_salida)
     print(f"  Guardado: {ruta_salida}")

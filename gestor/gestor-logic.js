@@ -145,6 +145,7 @@
                 if (!migrated.modulo) migrated.modulo = 'M1';
                 if (!migrated.cantidad) migrated.cantidad = 1;
                 if (migrated.conjunto === undefined) migrated.conjunto = false;
+                if (migrated.conjuntoVinculado === undefined) migrated.conjuntoVinculado = false;
                 if (migrated.adosamiento === undefined) migrated.adosamiento = null;
 
                 return migrated;
@@ -202,7 +203,7 @@
                 const folderPath = i.folderPath || "";
                 const numPedido = i.numPedido || "";
                 const adosamientoVal = i.adosamiento ? JSON.stringify(i.adosamiento) : "";
-                csv += `${i.fecha};${i.oferta};${numPedido};${i.cliente};${i.destino};${i.serie};${i.l};${i.a};${i.h};${estBase};${estCubierta};${estPilar};${i.cubierta || ""};${panelGrosor};${panelTipo};${i.base || ""};${i.acabado || ""};${i.suministro || ""};${i.perfilado || ""};${i.colorPanel || ""};${i.colorEstructura || ""};${i.colorCarpinteria || ""};${i.extra};${folderPath};${printedVal};${sentVal};${deliveredVal};${tipoRegistroVal};${revisionVal};${revHechaVal};${notasRevVal};${fechasRevVal};${favVal};${folderVal};${i.modulo || "M1"};${i.cantidad || 1};${i.conjunto ? "true" : "false"};${adosamientoVal}\n`;
+                csv += `${i.fecha};${i.oferta};${numPedido};${i.cliente};${i.destino};${i.serie};${i.l};${i.a};${i.h};${estBase};${estCubierta};${estPilar};${i.cubierta || ""};${panelGrosor};${panelTipo};${i.base || ""};${i.acabado || ""};${i.suministro || ""};${i.perfilado || ""};${i.colorPanel || ""};${i.colorEstructura || ""};${i.colorCarpinteria || ""};${i.extra};${folderPath};${printedVal};${sentVal};${deliveredVal};${tipoRegistroVal};${revisionVal};${revHechaVal};${notasRevVal};${fechasRevVal};${favVal};${folderVal};${i.modulo || "M1"};${i.cantidad || 1};${i.conjunto ? "true" : "false"};${adosamientoVal};${i.conjuntoVinculado ? "true" : "false"}\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const a = document.createElement("a");
@@ -276,7 +277,8 @@
                     modulo:   (parts[34] && parts[34].trim()) ? parts[34].trim() : 'M1',
                     cantidad: isNaN(parseInt(parts[35])) ? 1 : parseInt(parts[35]),
                     conjunto: (parts[36] === 'true'),
-                    adosamiento: (() => { try { return parts[37] && parts[37].trim() ? JSON.parse(parts[37]) : null; } catch(e) { return null; } })()
+                    adosamiento: (() => { try { return parts[37] && parts[37].trim() ? JSON.parse(parts[37]) : null; } catch(e) { return null; } })(),
+                    conjuntoVinculado: (parts[38] === 'true')
                 };
             });
 
@@ -1259,7 +1261,7 @@
             // Determinar el tipoRegistro según el modo actual
             const tipoReg = modoActual === 'ofertas' ? 1 : 0;
             const newOrder = { 
-                id: Date.now(), fecha: new Date().toLocaleDateString('es-ES'), oferta: "OF ---/26", numPedido: "", cliente: "NUEVO", destino: "-", serie: "-", l: "0", a: "0", h: "0", estBase: "", estCubierta: "", estPilar: "", panelGrosor: "", panelTipo: "", cantidad: 1, modulo: "M1", conjunto: false, adosamiento: null, cubierta: "", base: "", acabado: "", suministro: "", perfilado: "", colorPanel: "", colorEstructura: "", colorCarpinteria: "", extra: "", folderPath: "", printed: 0, sent: 0, delivered: 0, tipoRegistro: tipoReg, revision: 0, revHecha: {}, notasRev: {}, fechasRev: {}, favorite: false, folder: null
+                id: Date.now(), fecha: new Date().toLocaleDateString('es-ES'), oferta: "OF ---/26", numPedido: "", cliente: "NUEVO", destino: "-", serie: "-", l: "0", a: "0", h: "0", estBase: "", estCubierta: "", estPilar: "", panelGrosor: "", panelTipo: "", cantidad: 1, modulo: "M1", conjunto: false, conjuntoVinculado: false, adosamiento: null, cubierta: "", base: "", acabado: "", suministro: "", perfilado: "", colorPanel: "", colorEstructura: "", colorCarpinteria: "", extra: "", folderPath: "", printed: 0, sent: 0, delivered: 0, tipoRegistro: tipoReg, revision: 0, revHecha: {}, notasRev: {}, fechasRev: {}, favorite: false, folder: null
             };
             pushToHistory(); orders.unshift(newOrder); saveList(false); renderTable();
         }

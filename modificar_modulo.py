@@ -144,9 +144,11 @@ def mostrar_menu(grupos):
             print(f"  [{i:>2}]  {clave:15}  {cliente:15}  {_c(f,'destino'):15}  "
                   f"L={_c(f,'l')} A={_c(f,'a')}  {_c(f,'base') or 'HIDRÓFUGO':12}  {_c(f,'panelGrosor') or '-'}mm")
         else:
-            print(f"  [{i:>2}]  {clave:15}  {cliente:15}  ({len(filas_g)} módulos)")
+            print(f"  [{i:>2}]  {clave:15}  {cliente:15}  ({len(filas_g)} planos)")
             for j, f in enumerate(filas_g, 1):
-                print(f"         M{j}  L={_c(f,'l')} A={_c(f,'a')}  {_c(f,'destino'):15}  "
+                mod  = _c(f, 'modulo') or f'M{j}'
+                tipo = 'CONJ' if _c(f,'conjunto').strip().lower() == 'true' else 'AIS '
+                print(f"         {mod}  {tipo}  L={_c(f,'l')} A={_c(f,'a')}  {_c(f,'destino'):15}  "
                       f"{_c(f,'base') or 'HIDRÓFUGO':12}  {_c(f,'panelGrosor') or '-'}mm  {_c(f,'extra')}")
     print("─────────────────")
     while True:
@@ -221,13 +223,41 @@ def main():
         destino0    = _c(filas_np[0], 'destino')
         base_nombre = f"{np}-{destino0}".replace("/","-").replace(" ","_")
 
-        # Separar filas CONJ y AISLADO
-        filas_conj = [f for f in filas_np if _c(f,'conjunto').strip().lower() == 'true']
-        filas_ais  = [f for f in filas_np if _c(f,'conjunto').strip().lower() != 'true']
+        # ── Nombres únicos por fila ───────────────────────────────────────────
+        # Si varios módulos del mismo pedido tienen el mismo modulo (ej. todos M1)
+        # se añade sufijo -1, -2, -3... para evitar que los DXF se sobreescriban.
+        _mods = [_c(f, 'modulo') or f'M{k+1}' for k, f in enumerate(filas_np)]
+        _frec = Counter(_mods)
+        _visto = {}
+        _nombre_unico = {}
+        for k, fila in enumerate(filas_np):
+            m = _mods[k]
+            if _frec[m] > 1:
+                _visto[m] = _visto.get(m, 0) + 1
+                _nombre_unico[id(fila)] = f"{base_nombre}-{m}-{_visto[m]}"
+            else:
+                _nombre_unico[id(fila)] = f"{base_nombre}-{m}"
 
-        # Buscar layout de adosamiento en la primera fila CONJ que lo tenga
+        def _nombre(fila):
+            return _nombre_unico[id(fila)]
+
+        # ── Clasificar filas ──────────────────────────────────────────────────
+        # conjuntoVinculado='' (CSV antiguo) → vinculado por compatibilidad
+        # conjuntoVinculado='true'  → comparte adosamiento con el resto del grupo
+        # conjuntoVinculado='false' → independiente, tiene su propio adosamiento
+        def _vinculado(f):
+            return _c(f, 'conjuntoVinculado').strip().lower() != 'false'
+
+        filas_conj_vinc = [f for f in filas_np
+                           if _c(f,'conjunto').strip().lower() == 'true' and _vinculado(f)]
+        filas_conj_solo = [f for f in filas_np
+                           if _c(f,'conjunto').strip().lower() == 'true' and not _vinculado(f)]
+        filas_ais       = [f for f in filas_np
+                           if _c(f,'conjunto').strip().lower() != 'true']
+
+        # ── CONJUNTO VINCULADO (un solo DXF adosado compartido) ───────────────
         adosamiento = None
-        for f in filas_conj:
+        for f in filas_conj_vinc:
             raw = _c(f, 'adosamiento').strip()
             if raw:
                 try:
@@ -236,29 +266,44 @@ def main():
                 except Exception:
                     pass
 
-        # ── CONJUNTO ADOSADO ──────────────────────────────────────────────────
-        if filas_conj and adosamiento and adosamiento.get('placed'):
+        if filas_conj_vinc and adosamiento and adosamiento.get('placed'):
             nombre   = f"{base_nombre}-ADO"
             ruta_sal = os.path.join(CARPETA_SALIDA, f"{nombre}.dxf")
             print(f"\nGenerando (adosado): {nombre}")
-            generar_adosado(filas_conj, adosamiento, PLANTILLA_DXF, ruta_sal)
+            generar_adosado(filas_conj_vinc, adosamiento, PLANTILLA_DXF, ruta_sal)
 
-        elif filas_conj:
-            # CONJ sin layout → generar individualmente como fallback
-            for i, fila in enumerate(filas_conj, 1):
-                mod = _c(fila, 'modulo') or f'M{i}'
-                nombre   = f"{base_nombre}-{mod}"
+        elif filas_conj_vinc:
+            # vinculado sin layout → fallback individual
+            for fila in filas_conj_vinc:
+                nombre   = _nombre(fila)
                 ruta_sal = os.path.join(CARPETA_SALIDA, f"{nombre}.dxf")
                 print(f"\nGenerando: {nombre}")
                 generar_modulo(fila, PLANTILLA_DXF, ruta_sal)
 
-        # ── MÓDULOS AISLADOS ──────────────────────────────────────────────────
-        for i, fila in enumerate(filas_ais, 1):
-            mod = _c(fila, 'modulo') or f'M{i}'
-            if len(filas_ais) == 1 and not filas_conj:
-                nombre = base_nombre          # pedido de 1 módulo: nombre limpio
+        # ── CONJUNTO INDEPENDIENTE (un DXF por fila, con su propio adosamiento) ─
+        for fila in filas_conj_solo:
+            nombre   = _nombre(fila)
+            ruta_sal = os.path.join(CARPETA_SALIDA, f"{nombre}.dxf")
+            raw_ado  = _c(fila, 'adosamiento').strip()
+            ado_solo = None
+            if raw_ado:
+                try:
+                    ado_solo = _json.loads(raw_ado)
+                except Exception:
+                    pass
+            if ado_solo and ado_solo.get('placed'):
+                print(f"\nGenerando (conj. independiente): {nombre}")
+                generar_adosado([fila], ado_solo, PLANTILLA_DXF, ruta_sal)
             else:
-                nombre = f"{base_nombre}-{mod}"
+                print(f"\nGenerando: {nombre}")
+                generar_modulo(fila, PLANTILLA_DXF, ruta_sal)
+
+        # ── MÓDULOS AISLADOS ──────────────────────────────────────────────────
+        for fila in filas_ais:
+            if len(filas_np) == 1:
+                nombre = base_nombre          # único módulo del pedido: nombre limpio
+            else:
+                nombre = _nombre(fila)
             ruta_sal = os.path.join(CARPETA_SALIDA, f"{nombre}.dxf")
             print(f"\nGenerando: {nombre}")
             generar_modulo(fila, PLANTILLA_DXF, ruta_sal)

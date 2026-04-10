@@ -29,7 +29,7 @@ COL = {
     "base":15,"acabado":16,"suministro":17,"perfilado":18,
     "colorPanel":19,"colorEstructura":20,"colorCarpinteria":21,"extra":22,
     # cols 23-33 son metadata del gestor (folderPath, impreso, etc.)
-    "modulo":34,"cantidad":35,"conjunto":36,"adosamiento":37,
+    "modulo":34,"cantidad":35,"conjunto":36,"adosamiento":37,"conjuntoVinculado":38,
 }
 
 # ─── COLORES RAL ──────────────────────────────────────────────────────────────

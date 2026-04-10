@@ -402,8 +402,11 @@
                     <td class="p-2 text-center" style="min-width:48px;">
                         <span onclick="cycleModulo(${item.id})" title="Clic para cambiar módulo" style="display:inline-block;padding:2px 7px;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:0.03em;${getModuloStyle(item.modulo)}">${item.modulo || 'M1'}</span>
                     </td>
-                    <td class="p-1 text-center" style="min-width:44px;vertical-align:middle;">
-                        <button onclick="toggleConjunto(${item.id})" title="${item.conjunto ? 'Módulo en CONJUNTO adosado — clic para cambiar a AISLADO' : 'Módulo AISLADO — clic para añadir a CONJUNTO adosado'}" style="display:inline-block;padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.04em;${item.conjunto ? 'background:rgba(20,184,166,0.2);border:1px solid rgba(20,184,166,0.6);color:#5eead4;' : 'background:rgba(71,85,105,0.2);border:1px solid #475569;color:#64748b;'}">${item.conjunto ? 'CONJ' : 'AIS'}</button>
+                    <td class="p-1 text-center" style="min-width:52px;vertical-align:middle;">
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+                            <button onclick="toggleConjunto(${item.id})" title="${item.conjunto ? 'Módulo en CONJUNTO adosado — clic para cambiar a AISLADO' : 'Módulo AISLADO — clic para añadir a CONJUNTO adosado'}" style="display:inline-block;padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.04em;${item.conjunto ? 'background:rgba(20,184,166,0.2);border:1px solid rgba(20,184,166,0.6);color:#5eead4;' : 'background:rgba(71,85,105,0.2);border:1px solid #475569;color:#64748b;'}">${item.conjunto ? 'CONJ' : 'AIS'}</button>
+                            ${item.conjunto ? `<button onclick="toggleConjuntoVinculado(${item.id})" title="${item.conjuntoVinculado ? 'Vinculado — comparte configurador con las demás filas CONJ del pedido' : 'Independiente — tiene su propio configurador'}" style="width:18px;height:18px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;${item.conjuntoVinculado ? 'background:rgba(20,184,166,0.2);border:1px solid rgba(20,184,166,0.6);color:#5eead4;' : 'background:transparent;border:1px dashed #475569;color:#475569;'}"><span class="material-symbols-outlined" style="font-size:11px">${item.conjuntoVinculado ? 'link' : 'link_off'}</span></button>` : ''}
+                        </div>
                     </td>
                     <td contenteditable="true" onblur="updateValue(${item.id}, 'l', this.innerText)" class="p-3 text-center text-emerald-400 font-bold mono-col separator-col">${item.l || '0'}</td>
                     <td contenteditable="true" onblur="updateValue(${item.id}, 'a', this.innerText)" class="p-3 text-center text-amber-400 font-bold mono-col separator-col">${item.a || '0'}</td>
@@ -608,11 +611,10 @@
                                 <button onclick="toggleTipoRegistro(${item.id})" class="action-btn transition-colors" title="${getTipoRegistroTitle(item.tipoRegistro || 0)}">
                                     <span class="material-symbols-outlined text-lg" style="color: ${getTipoRegistroColor(item.tipoRegistro || 0)}">${getTipoRegistroIcon(item.tipoRegistro || 0)}</span>
                                 </button>
-                                ${isFirstInGroup && groupItems.some(g => g.conjunto) ? (() => {
-                                    const hasLayout = groupItems.some(g => g.adosamiento);
-                                    const gk = groupKey.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                                ${item.conjunto ? (() => {
+                                    const hasLayout = !!item.adosamiento;
                                     return `<div class="estado-separator"></div>
-                                <button onclick="openAdosamientoConfig('${gk}')" class="action-btn transition-colors" title="${hasLayout ? 'Editar layout de adosamiento' : 'Configurar adosamiento'}">
+                                <button onclick="openAdosamientoConfig(${item.id})" class="action-btn transition-colors" title="${hasLayout ? 'Editar layout de adosamiento' : 'Configurar adosamiento'}">
                                     <span class="material-symbols-outlined text-lg" style="color:${hasLayout ? '#5eead4' : '#94a3b8'}">grid_view</span>
                                 </button>`;
                                 })() : ''}

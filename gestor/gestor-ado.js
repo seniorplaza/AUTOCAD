@@ -40,6 +40,8 @@
 // ═══ ADOSAMIENTO STATE ═══════════════════════════════════════════════════════
         let adoState = {
             groupKey:     null,
+            rowId:        null,  // id de la fila CONJ que se está editando
+            grupoRowIds:  [],    // ids de todas las filas del grupo (si hay conjuntoGrupo)
             pool:         [],    // [{poolId, rowId, modulo, l, a, ...}]
             placed:       [],    // [{key, poolId, modulo, l, a, x, y}]
             pending:      null,  // {targetKey, dir} — esperando selección de módulo
@@ -52,50 +54,59 @@
         };
 
 // ═══ ADOSAMIENTO FUNCTIONS ═══════════════════════════════════════════════════
-        function openAdosamientoConfig(groupKey) {
-            const [oferta, numPedido, cliente] = groupKey.split('||');
-            const conjItems = orders.filter(o =>
-                (o.oferta||'') === oferta &&
-                (o.numPedido||'') === numPedido &&
-                (o.cliente||'') === cliente &&
-                o.conjunto
-            );
-            if (!conjItems.length) return;
+        function openAdosamientoConfig(itemId) {
+            const row = orders.find(o => o.id === itemId);
+            if (!row || !row.conjunto) return;
 
-            adoState.groupKey = groupKey;
+            adoState.rowId    = itemId;
+            adoState.groupKey = (row.oferta||'') + '||' + (row.numPedido||'') + '||' + (row.cliente||'');
 
-            // Construir pool desde filas CONJ del pedido
+            // Determinar filas del grupo: si está vinculado, incluir todas las filas
+            // CONJ vinculadas del mismo pedido; si no, solo esta fila
+            let grupoRows;
+            if (row.conjuntoVinculado) {
+                grupoRows = orders.filter(o =>
+                    (o.oferta||'') === (row.oferta||'') &&
+                    (o.numPedido||'') === (row.numPedido||'') &&
+                    (o.cliente||'') === (row.cliente||'') &&
+                    o.conjunto &&
+                    o.conjuntoVinculado
+                );
+            } else {
+                grupoRows = [row];
+            }
+            adoState.grupoRowIds = grupoRows.map(r => r.id);
+
+            // Construir pool con los módulos de todas las filas del grupo
             adoState.pool = [];
-            conjItems.forEach(row => {
-                const qty = Math.max(1, parseInt(row.cantidad) || 1);
+            grupoRows.forEach(r => {
+                const qty = Math.max(1, parseInt(r.cantidad) || 1);
                 for (let i = 0; i < qty; i++) {
                     adoState.pool.push({
-                        poolId:      `${row.id}_${i}`,
-                        rowId:       row.id,
-                        modulo:      row.modulo || 'M1',
-                        l:           parseInt(row.l) || 6000,
-                        a:           parseInt(row.a) || 2350,
-                        panelGrosor: row.panelGrosor || '',
-                        base:        row.base || 'HIDRÓFUGO',
-                        acabado:     row.acabado || '',
+                        poolId:      `${r.id}_${i}`,
+                        rowId:       r.id,
+                        modulo:      r.modulo || 'M1',
+                        l:           parseInt(r.l) || 6000,
+                        a:           parseInt(r.a) || 2350,
+                        panelGrosor: r.panelGrosor || '',
+                        base:        r.base || 'HIDRÓFUGO',
+                        acabado:     r.acabado || '',
                     });
                 }
             });
 
-            // Cargar layout existente o iniciar con el primer módulo
-            const firstConj = conjItems[0];
-            if (firstConj.adosamiento && firstConj.adosamiento.placed && firstConj.adosamiento.placed.length) {
+            // Cargar layout: buscar la primera fila del grupo que tenga config guardada
+            const configRow = grupoRows.find(r => r.adosamiento && r.adosamiento.placed && r.adosamiento.placed.length) || grupoRows[0];
+            if (configRow.adosamiento && configRow.adosamiento.placed && configRow.adosamiento.placed.length) {
                 const validPoolIds = new Set(adoState.pool.map(p => p.poolId));
                 const usedPoolIds  = new Set();
-                // Solo mantener placed cuyos poolId existen en el pool actual y no están duplicados
-                adoState.placed = JSON.parse(JSON.stringify(firstConj.adosamiento.placed))
+                adoState.placed = JSON.parse(JSON.stringify(configRow.adosamiento.placed))
                     .filter(p => {
                         if (!validPoolIds.has(p.poolId)) return false;
                         if (usedPoolIds.has(p.poolId)) return false;
                         usedPoolIds.add(p.poolId);
                         return true;
                     });
-                // Si quedó vacío (todos los poolIds cambiaron), iniciar con el primero
                 if (!adoState.placed.length) {
                     const p = adoState.pool[0];
                     adoState.placed = [{ key:'k0', poolId:p.poolId, modulo:p.modulo, l:p.l, a:p.a, x:0, y:0 }];
@@ -106,8 +117,8 @@
             }
 
             // Cargar faceMap guardado
-            adoState.faceMap = (firstConj.adosamiento && firstConj.adosamiento.faceMap)
-                               ? JSON.parse(JSON.stringify(firstConj.adosamiento.faceMap))
+            adoState.faceMap = (configRow.adosamiento && configRow.adosamiento.faceMap)
+                               ? JSON.parse(JSON.stringify(configRow.adosamiento.faceMap))
                                : {};
 
             adoState.pending = null;
@@ -619,24 +630,23 @@
         }
 
         function adoSave() {
-            const [oferta, numPedido, cliente] = adoState.groupKey.split('||');
-            const firstConj = orders.find(o =>
-                (o.oferta||'') === oferta &&
-                (o.numPedido||'') === numPedido &&
-                (o.cliente||'') === cliente &&
-                o.conjunto
-            );
-            if (!firstConj) { adoClose(); return; }
-
             pushToHistory();
 
             // Normalizar: desplazar para que minX=0, minY=0
             const minX = Math.min(...adoState.placed.map(p => p.x));
             const minY = Math.min(...adoState.placed.map(p => p.y));
-            firstConj.adosamiento = {
+            const config = {
                 placed:  adoState.placed.map(p => ({ ...p, x: p.x - minX, y: p.y - minY })),
                 faceMap: JSON.parse(JSON.stringify(adoState.faceMap)),
             };
+
+            // Guardar en todas las filas del grupo (para que hasLayout funcione en cada una)
+            const rowIds = adoState.grupoRowIds.length ? adoState.grupoRowIds : [adoState.rowId];
+            rowIds.forEach(rid => {
+                const r = orders.find(o => o.id === rid);
+                if (r) r.adosamiento = JSON.parse(JSON.stringify(config));
+            });
+            if (!rowIds.length) { adoClose(); return; }
 
             saveList(false);
             adoClose();

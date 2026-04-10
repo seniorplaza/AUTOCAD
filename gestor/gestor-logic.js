@@ -1152,20 +1152,27 @@
             renderTable();
         }
 
+        // ── Vinculación de adosamiento ────────────────────────────────────────────
+        function toggleConjuntoVinculado(id) {
+            const index = orders.findIndex(o => o.id === id);
+            if (index === -1) return;
+            pushToHistory();
+            orders[index].conjuntoVinculado = !orders[index].conjuntoVinculado;
+            // Limpiar adosamiento al cambiar modo para que se reconfigure
+            orders[index].adosamiento = null;
+            saveList(false);
+            renderTable();
+        }
+
         function toggleConjunto(id) {
             const index = orders.findIndex(o => o.id === id);
             if (index === -1) return;
             pushToHistory();
             orders[index].conjunto = !orders[index].conjunto;
-            // Si pasa a AISLADO, borrar config de adosamiento del pedido
             if (!orders[index].conjunto) {
-                const o = orders[index];
-                const siblings = orders.filter(s => s.oferta === o.oferta && s.numPedido === o.numPedido && s.cliente === o.cliente);
-                const anyGrp = siblings.some(s => s.id !== id && s.conjunto);
-                if (!anyGrp) {
-                    // Ninguno queda en GRP → borrar adosamiento de todos
-                    siblings.forEach(s => { s.adosamiento = null; });
-                }
+                // Pasa a AISLADO: limpiar vinculación y adosamiento
+                orders[index].conjuntoVinculado = false;
+                orders[index].adosamiento       = null;
             }
             saveList(false);
             renderTable();

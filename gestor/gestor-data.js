@@ -90,6 +90,7 @@
             { name: "RAL 1005 - Amarillo miel", code: "#A98307" },
             { name: "RAL 1006 - Amarillo maíz", code: "#E4A010" },
             { name: "RAL 1007 - Amarillo narciso", code: "#DC9D00" },
+            { name: "RAL 1013 - Blanco perla", code: "#E7D69D" },
             { name: "RAL 2000 - Naranja amarillo", code: "#ED760E" },
             { name: "RAL 2001 - Naranja rojo", code: "#C93C20" },
             { name: "RAL 2002 - Naranja sangre", code: "#CB2821" },

@@ -868,11 +868,16 @@
             // Sin panel → E80 (solo estructura)
             if (!item.panelGrosor || !parseInt(item.panelGrosor)) return 'E80';
             const l = parseInt(item.l) || 0;
-            if (l >= 6000) return 'E90';
-            if (l >= 5000) return 'E230';
-            if (l >= 4000) return 'E270';
-            if (l >= 3000) return 'E290';
-            return 'E80 P';  // < 3000mm — paletizado
+            const grosor = parseInt(item.panelGrosor) || 40;
+            // < 3000mm — panel va aparte, solo base+cubierta, siempre E80 P
+            if (l < 3000) return 'E80 P';
+            // Con panel: base según L + ajuste por grosor extra sobre 40mm
+            let base;
+            if (l >= 6000) base = 190;
+            else if (l >= 5000) base = 230;
+            else if (l >= 4000) base = 270;
+            else base = 290; // >= 3000
+            return `E${base + (grosor - 40)}`;
         }
 
         function updateValue(id, key, value) {

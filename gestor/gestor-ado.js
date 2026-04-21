@@ -293,7 +293,7 @@
                 const lines = [
                     { full: m.modulo,                    short: m.modulo,           size: fs,  weight: 700, color: col.text  },
                     { full: `${m.l}×${m.a}`,             short: `${m.l}×${m.a}`,   size: fs2, weight: 400, color: '#64748b' },
-                    ...(slot.panelGrosor ? [{ full: `Panel ${slot.panelGrosor}mm`, short: slot.panelGrosor, size: fs2, weight: 400, color: '#94a3b8' }] : []),
+                    ...(slot.panelGrosor ? [{ full: `Carril ${slot.panelGrosor}mm${slot.conPanel !== false ? ' c/panel' : ''}`, short: slot.panelGrosor, size: fs2, weight: 400, color: '#94a3b8' }] : []),
                     { full: tableroFull,                 short: tableroShort,       size: fs2, weight: 400, color: '#94a3b8' },
                     ...(acabadoFull      ? [{ full: acabadoFull,  short: acabadoShort,  size: fs2, weight: 400, color: '#64748b' }] : []),
                 ];

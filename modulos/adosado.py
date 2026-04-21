@@ -40,6 +40,7 @@ def _tipo_tablero(base):
     b = (base or '').strip().upper().replace('Ó','O').replace('É','E').replace('Í','I')
     if 'FIBRO' in b:  return 'Fibrocemento'
     if 'FENOL' in b:  return 'Fenólico'
+    if not b or 'NO INCLUYE' in b or 'OTRO' in b: return 'NO INCLUYE'
     return 'Hidrófugo'
 
 
@@ -293,11 +294,12 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
         largo_m   = A_m if rotado_m else L_m   # dimensión larga (span correas)
         ancho_m   = L_m if rotado_m else A_m   # dimensión corta (offset carriles/pilares)
 
-        aislado_m = _cf(fila_m, 'aislado').lower() == 'true'
+        aislado_m  = _cf(fila_m, 'aislado').lower() == 'true'
+        con_panel_m = bool(panel_m) and _cf(fila_m, 'conPanel').lower() != 'false'
         hbase_m  = calc_hbase(largo_m, ancho_m, base_m, panel_m, aislado_m)
         hbase_d  = hbase_m if isinstance(hbase_m, int) else (140 if "140" in str(hbase_m) else 160)
         correas_m, tablero_m = calc_correas(largo_m, base_m, ancho_m, g_car_m)
-        blk_pil_m = nombre_bloque_pilar(ancho_m, panel_m)
+        blk_pil_m = nombre_bloque_pilar(ancho_m, panel_m if con_panel_m else "")
         # Correas para el alzado (siempre en el eje X del módulo = L_m)
         correas_alz = calc_correas(L_m, base_m, A_m, g_car_m)[0] if rotado_m else correas_m
 

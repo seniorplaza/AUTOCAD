@@ -203,7 +203,7 @@
                 const folderPath = i.folderPath || "";
                 const numPedido = i.numPedido || "";
                 const adosamientoVal = i.adosamiento ? JSON.stringify(i.adosamiento) : "";
-                csv += `${i.fecha};${i.oferta};${numPedido};${i.cliente};${i.destino};${i.serie};${i.l};${i.a};${i.h};${estBase};${estCubierta};${estPilar};${i.cubierta || ""};${panelGrosor};${panelTipo};${i.base || ""};${i.acabado || ""};${i.suministro || ""};${i.perfilado || ""};${i.colorPanel || ""};${i.colorEstructura || ""};${i.colorCarpinteria || ""};${i.extra};${folderPath};${printedVal};${sentVal};${deliveredVal};${tipoRegistroVal};${revisionVal};${revHechaVal};${notasRevVal};${fechasRevVal};${favVal};${folderVal};${i.modulo || "M1"};${i.cantidad || 1};${i.conjunto ? "true" : "false"};${adosamientoVal};${i.conjuntoVinculado ? "true" : "false"};${i.aislado ? "true" : "false"}\n`;
+                csv += `${i.fecha};${i.oferta};${numPedido};${i.cliente};${i.destino};${i.serie};${i.l};${i.a};${i.h};${estBase};${estCubierta};${estPilar};${i.cubierta || ""};${panelGrosor};${panelTipo};${i.base || ""};${i.acabado || ""};${i.suministro || ""};${i.perfilado || ""};${i.colorPanel || ""};${i.colorEstructura || ""};${i.colorCarpinteria || ""};${i.extra};${folderPath};${printedVal};${sentVal};${deliveredVal};${tipoRegistroVal};${revisionVal};${revHechaVal};${notasRevVal};${fechasRevVal};${favVal};${folderVal};${i.modulo || "M1"};${i.cantidad || 1};${i.conjunto ? "true" : "false"};${adosamientoVal};${i.conjuntoVinculado ? "true" : "false"};${i.aislado ? "true" : "false"};${i.conPanel === false ? "false" : "true"}\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const a = document.createElement("a");
@@ -279,7 +279,8 @@
                     conjunto: (parts[36] === 'true'),
                     adosamiento: (() => { try { return parts[37] && parts[37].trim() ? JSON.parse(parts[37]) : null; } catch(e) { return null; } })(),
                     conjuntoVinculado: (parts[38] === 'true'),
-                    aislado: (parts[39] === 'true')
+                    aislado: (parts[39] === 'true'),
+                    conPanel: (parts[40] !== 'false')
                 };
             });
 
@@ -901,6 +902,17 @@
             }
         }
 
+        function updateConPanel(id, checked) {
+            const index = orders.findIndex(o => o.id === id);
+            if (index !== -1) {
+                pushToHistory();
+                orders[index].conPanel = checked;
+                localStorage.setItem('fabricacion_orders', JSON.stringify(orders));
+                showSaveStatus();
+                renderTable();
+            }
+        }
+
         function updateAislado(id, checked) {
             const index = orders.findIndex(o => o.id === id);
             if (index !== -1) {
@@ -1278,7 +1290,7 @@
             // Determinar el tipoRegistro según el modo actual
             const tipoReg = modoActual === 'ofertas' ? 1 : 0;
             const newOrder = { 
-                id: Date.now(), fecha: new Date().toLocaleDateString('es-ES'), oferta: "OF ---/26", numPedido: "", cliente: "NUEVO", destino: "-", serie: "-", l: "0", a: "0", h: "0", estBase: "", estCubierta: "", estPilar: "", panelGrosor: "", panelTipo: "", cantidad: 1, modulo: "M1", conjunto: false, conjuntoVinculado: false, adosamiento: null, cubierta: "", base: "", acabado: "", suministro: "", perfilado: "", colorPanel: "", colorEstructura: "", colorCarpinteria: "", extra: "", folderPath: "", printed: 0, sent: 0, delivered: 0, tipoRegistro: tipoReg, revision: 0, revHecha: {}, notasRev: {}, fechasRev: {}, favorite: false, folder: null, aislado: false
+                id: Date.now(), fecha: new Date().toLocaleDateString('es-ES'), oferta: "OF ---/26", numPedido: "", cliente: "NUEVO", destino: "-", serie: "-", l: "0", a: "0", h: "0", estBase: "", estCubierta: "", estPilar: "", panelGrosor: "", panelTipo: "", cantidad: 1, modulo: "M1", conjunto: false, conjuntoVinculado: false, adosamiento: null, cubierta: "", base: "", acabado: "", suministro: "", perfilado: "", colorPanel: "", colorEstructura: "", colorCarpinteria: "", extra: "", folderPath: "", printed: 0, sent: 0, delivered: 0, tipoRegistro: tipoReg, revision: 0, revHecha: {}, notasRev: {}, fechasRev: {}, favorite: false, folder: null, aislado: false, conPanel: true
             };
             pushToHistory(); orders.unshift(newOrder); saveList(false); renderTable();
         }

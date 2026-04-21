@@ -37,10 +37,12 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
         adosamiento = None
 
     aislado    = c("aislado").lower() == "true"
+    con_panel  = bool(panel) and c("conPanel").lower() != "false"
     hbase      = calc_hbase(L, A, base, panel, aislado)
     hcub       = calc_hcubierta(L, A, base, panel, c("cubierta"))
     long_pilar = H + 25
-    bloque_pil = nombre_bloque_pilar(A, panel)
+    panel_pil  = panel if con_panel else ""
+    bloque_pil = nombre_bloque_pilar(A, panel_pil)
     g_carril   = grosor_carril(panel)
     correas, tablero = calc_correas(L, base, A, g_carril)
     col_est    = hex_a_ral(c("colorEstructura"))
@@ -194,6 +196,8 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
         tipo_tablero = 'Fibrocemento'
     elif 'FENOL' in _base_upper:
         tipo_tablero = 'Fenólico'
+    elif not _base_upper or 'NO INCLUYE' in _base_upper or 'OTRO' in _base_upper:
+        tipo_tablero = 'NO INCLUYE'
     else:
         tipo_tablero = 'Hidrófugo'
 
@@ -249,7 +253,7 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
         dibujar_fleje(msp, doc, x0, y0, x1, y1, g_carril, tipo_tablero, x_cota=x0 - OFS_IZQ + 110)
     dibujar_seccion_ancho(msp, doc, x0, y0, x1, y1, hbase_draw, g_carril, tipo_tablero, L, base)
     dibujar_bloques_recuadros(msp, doc, x0, y0, x1, y1, hbase_draw, long_pilar, A,
-                              panel, g_carril, c("panelTipo"), c("serie"), c("suministro"),
+                              panel_pil, g_carril, c("panelTipo") if con_panel else "", c("serie"), c("suministro"),
                               tipo_tablero, c("acabado"))
 
     # 9. Pilares al final → draw order encima de todo

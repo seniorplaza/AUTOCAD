@@ -477,6 +477,10 @@
                                 <option value="100|LDR" ${item.panelGrosor === '100' && item.panelTipo === 'LDR' ? 'selected' : ''}>100 LDR</option>
                             </optgroup>
                         </select>
+                        ${item.panelGrosor ? `<label class="flex items-center gap-1 mt-1 cursor-pointer justify-center" style="font-size:10px; color:${item.conPanel === false ? '#f87171' : '#86efac'};">
+                            <input type="checkbox" ${item.conPanel !== false ? 'checked' : ''} onchange="updateConPanel(${item.id}, this.checked)" style="cursor:pointer; accent-color:#22c55e;">
+                            C/PANEL
+                        </label>` : ''}
                     </td>
                     <td class="p-2 text-xs text-center base-text">
                         <select onchange="updateValue(${item.id}, 'base', this.value)" class="select-card base-select">
@@ -838,7 +842,7 @@
                                 <th>A</th>
                                 <th>H</th>
                                 <th>Estructura</th>
-                                <th>Panel</th>
+                                <th>Carril/Panel</th>
                                 <th>Base</th>
                                 <th>Acabado</th>
                                 <th>Suministro</th>

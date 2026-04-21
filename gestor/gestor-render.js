@@ -239,7 +239,7 @@
                     if (key === 'estructura') {
                         if (!filters[key]) return true;
                         const searchTerm = filters[key].toLowerCase();
-                        const hBase = String(calcularHBase(item.l, item.a, item.base, item.panelGrosor)).toLowerCase();
+                        const hBase = String(calcularHBase(item.l, item.a, item.base, item.panelGrosor, item.aislado)).toLowerCase();
                         const hCubierta = String(calcularHCubierta(item.l, item.a, item.base, item.panelGrosor, item.cubierta)).toLowerCase();
                         const pilar = String(calcularPilar(item.a, item.panelGrosor)).toLowerCase();
                         return hBase.includes(searchTerm) || hCubierta.includes(searchTerm) || pilar.includes(searchTerm);
@@ -415,7 +415,7 @@
                         <div class="flex items-center justify-center gap-3">
                             <div class="flex items-center gap-1" title="H BASE - Altura de la base (calculado según L, A y Base)">
                                 <span class="material-symbols-outlined" style="font-size: 20px; color: #ffffff; cursor: help;">vertical_align_bottom</span>
-                                <span class="font-bold text-white" style="font-family: 'Courier New', monospace; font-size: 13px;">${calcularHBase(item.l, item.a, item.base, item.panelGrosor)}</span>
+                                <span class="font-bold text-white" style="font-family: 'Courier New', monospace; font-size: 13px;">${calcularHBase(item.l, item.a, item.base, item.panelGrosor, item.aislado)}</span>
                             </div>
                             <div class="flex items-center gap-1" title="H CUBIERTA - Altura de la cubierta (calculado según L, A y Base)">
                                 <span class="material-symbols-outlined" style="font-size: 20px; color: #ffffff; cursor: help;">vertical_align_top</span>
@@ -490,6 +490,10 @@
                             <option value="NO INCLUYE" ${item.base === 'NO INCLUYE' ? 'selected' : ''}>NO INCLUYE</option>
                             <option value="OTRO" ${item.base === 'OTRO' ? 'selected' : ''}>OTRO</option>
                         </select>
+                        <label class="flex items-center gap-1 mt-1 cursor-pointer justify-center" style="font-size:10px; color:#aaa;">
+                            <input type="checkbox" ${item.aislado ? 'checked' : ''} onchange="updateAislado(${item.id}, this.checked)" style="cursor:pointer; accent-color:#f59e0b;">
+                            AISL.
+                        </label>
                     </td>
                     <td class="p-2 text-xs text-center acabado-text">
                         <select onchange="updateValue(${item.id}, 'acabado', this.value)" class="select-card acabado-select">
@@ -736,7 +740,7 @@
                 return grupo.map((p, gi) => {
                     const isFirst = gi === 0;
                     const isLast  = gi === groupSize - 1;
-                    const estructura = `${calcularHBase(p.l, p.a, p.base, p.panelGrosor)}/${calcularHCubierta(p.l, p.a, p.base, p.panelGrosor, p.cubierta)}/${calcularPilar(p.a, p.panelGrosor)}`;
+                    const estructura = `${calcularHBase(p.l, p.a, p.base, p.panelGrosor, p.aislado)}/${calcularHCubierta(p.l, p.a, p.base, p.panelGrosor, p.cubierta)}/${calcularPilar(p.a, p.panelGrosor)}`;
                     const panel = (p.panelGrosor || '') + (p.panelTipo ? ' ' + p.panelTipo : '') || '-';
 
                     // Corchete CSS puro (se imprime siempre, sin SVG)

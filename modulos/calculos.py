@@ -19,11 +19,11 @@ def hex_a_ral(v):
     return MAPA_RAL.get(v.upper(), "")
 
 
-def calc_hbase(l, a, base, panel):
+def calc_hbase(l, a, base, panel, aislado=False):
     """
     Altura del perfil de base según tipo y dimensiones.
     HORMIGONADA devuelve string "UPN Xmm". Resto devuelve entero (mm).
-    NOTA: panel exactamente 50mm usa carril e50 → NO sube a 160 (condición p > 50).
+    aislado=True: base aislada e40 → mínimo 160 para L<=6000.
     """
     try: L=int(l); A=int(a)
     except: return 137
@@ -33,7 +33,7 @@ def calc_hbase(l, a, base, panel):
     if t == "HORMIGONADA": return "UPN 140" if L <= 7000 else "UPN 160"
     if t == "TRAMEX":      return 200
     if t == "SANEAMIENTO": return 240
-    v = 137 if L <= 6000 else 160 if L <= 8500 else 200
+    v = (160 if aislado else 137) if L <= 6000 else 160 if L <= 8500 else 200
     if p > 60: v = max(v, 160)
     if A > 2500: v = max(v, 160)
     return v

@@ -203,7 +203,7 @@
                 const folderPath = i.folderPath || "";
                 const numPedido = i.numPedido || "";
                 const adosamientoVal = i.adosamiento ? JSON.stringify(i.adosamiento) : "";
-                csv += `${i.fecha};${i.oferta};${numPedido};${i.cliente};${i.destino};${i.serie};${i.l};${i.a};${i.h};${estBase};${estCubierta};${estPilar};${i.cubierta || ""};${panelGrosor};${panelTipo};${i.base || ""};${i.acabado || ""};${i.suministro || ""};${i.perfilado || ""};${i.colorPanel || ""};${i.colorEstructura || ""};${i.colorCarpinteria || ""};${i.extra};${folderPath};${printedVal};${sentVal};${deliveredVal};${tipoRegistroVal};${revisionVal};${revHechaVal};${notasRevVal};${fechasRevVal};${favVal};${folderVal};${i.modulo || "M1"};${i.cantidad || 1};${i.conjunto ? "true" : "false"};${adosamientoVal};${i.conjuntoVinculado ? "true" : "false"}\n`;
+                csv += `${i.fecha};${i.oferta};${numPedido};${i.cliente};${i.destino};${i.serie};${i.l};${i.a};${i.h};${estBase};${estCubierta};${estPilar};${i.cubierta || ""};${panelGrosor};${panelTipo};${i.base || ""};${i.acabado || ""};${i.suministro || ""};${i.perfilado || ""};${i.colorPanel || ""};${i.colorEstructura || ""};${i.colorCarpinteria || ""};${i.extra};${folderPath};${printedVal};${sentVal};${deliveredVal};${tipoRegistroVal};${revisionVal};${revHechaVal};${notasRevVal};${fechasRevVal};${favVal};${folderVal};${i.modulo || "M1"};${i.cantidad || 1};${i.conjunto ? "true" : "false"};${adosamientoVal};${i.conjuntoVinculado ? "true" : "false"};${i.aislado ? "true" : "false"}\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const a = document.createElement("a");
@@ -278,7 +278,8 @@
                     cantidad: isNaN(parseInt(parts[35])) ? 1 : parseInt(parts[35]),
                     conjunto: (parts[36] === 'true'),
                     adosamiento: (() => { try { return parts[37] && parts[37].trim() ? JSON.parse(parts[37]) : null; } catch(e) { return null; } })(),
-                    conjuntoVinculado: (parts[38] === 'true')
+                    conjuntoVinculado: (parts[38] === 'true'),
+                    aislado: (parts[39] === 'true')
                 };
             });
 
@@ -670,7 +671,7 @@
             } else {
                 // MODO PEDIDOS: Todas las columnas
                 const panel = item.panelGrosor && item.panelTipo ? `${item.panelGrosor} ${item.panelTipo}` : (item.panelGrosor || item.panelTipo || '-');
-                const hBase = calcularHBase(item.l, item.a, item.base, item.panelGrosor);
+                const hBase = calcularHBase(item.l, item.a, item.base, item.panelGrosor, item.aislado);
                 const hCubierta = calcularHCubierta(item.l, item.a, item.base, item.panelGrosor, item.cubierta);
                 const pilar = calcularPilar(item.a, item.panelGrosor);
                 const estructura = `H.Base: ${hBase} / H.Cubierta: ${hCubierta} / Pilar: ${pilar}`;
@@ -900,6 +901,17 @@
             }
         }
 
+        function updateAislado(id, checked) {
+            const index = orders.findIndex(o => o.id === id);
+            if (index !== -1) {
+                pushToHistory();
+                orders[index].aislado = checked;
+                localStorage.setItem('fabricacion_orders', JSON.stringify(orders));
+                showSaveStatus();
+                renderTable();
+            }
+        }
+
         function updateCubierta(id, value) {
             const index = orders.findIndex(o => o.id === id);
             if (index !== -1) {
@@ -927,7 +939,7 @@
             }
         }
 
-        function calcularHBase(l, a, base, panelGrosor) {
+        function calcularHBase(l, a, base, panelGrosor, aislado) {
             const longitud = parseInt(l) || 0;
             const anchura = parseInt(a) || 0;
             const tipoBase = (base || "").toUpperCase().trim();
@@ -955,7 +967,7 @@
 
             // Cálculo base según longitud
             let valorBase;
-            if (longitud <= 6000) valorBase = 137;
+            if (longitud <= 6000) valorBase = aislado ? 160 : 137;
             else if (longitud <= 7000) valorBase = 160;
             else if (longitud <= 8500) valorBase = 160;
             else valorBase = 200;
@@ -1266,7 +1278,7 @@
             // Determinar el tipoRegistro según el modo actual
             const tipoReg = modoActual === 'ofertas' ? 1 : 0;
             const newOrder = { 
-                id: Date.now(), fecha: new Date().toLocaleDateString('es-ES'), oferta: "OF ---/26", numPedido: "", cliente: "NUEVO", destino: "-", serie: "-", l: "0", a: "0", h: "0", estBase: "", estCubierta: "", estPilar: "", panelGrosor: "", panelTipo: "", cantidad: 1, modulo: "M1", conjunto: false, conjuntoVinculado: false, adosamiento: null, cubierta: "", base: "", acabado: "", suministro: "", perfilado: "", colorPanel: "", colorEstructura: "", colorCarpinteria: "", extra: "", folderPath: "", printed: 0, sent: 0, delivered: 0, tipoRegistro: tipoReg, revision: 0, revHecha: {}, notasRev: {}, fechasRev: {}, favorite: false, folder: null
+                id: Date.now(), fecha: new Date().toLocaleDateString('es-ES'), oferta: "OF ---/26", numPedido: "", cliente: "NUEVO", destino: "-", serie: "-", l: "0", a: "0", h: "0", estBase: "", estCubierta: "", estPilar: "", panelGrosor: "", panelTipo: "", cantidad: 1, modulo: "M1", conjunto: false, conjuntoVinculado: false, adosamiento: null, cubierta: "", base: "", acabado: "", suministro: "", perfilado: "", colorPanel: "", colorEstructura: "", colorCarpinteria: "", extra: "", folderPath: "", printed: 0, sent: 0, delivered: 0, tipoRegistro: tipoReg, revision: 0, revHecha: {}, notasRev: {}, fechasRev: {}, favorite: false, folder: null, aislado: false
             };
             pushToHistory(); orders.unshift(newOrder); saveList(false); renderTable();
         }

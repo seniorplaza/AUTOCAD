@@ -36,7 +36,8 @@ def generar_modulo(fila, ruta_plantilla, ruta_salida):
     except Exception:
         adosamiento = None
 
-    hbase      = calc_hbase(L, A, base, panel)
+    aislado    = c("aislado").lower() == "true"
+    hbase      = calc_hbase(L, A, base, panel, aislado)
     hcub       = calc_hcubierta(L, A, base, panel, c("cubierta"))
     long_pilar = H + 25
     bloque_pil = nombre_bloque_pilar(A, panel)

@@ -293,7 +293,8 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
         largo_m   = A_m if rotado_m else L_m   # dimensión larga (span correas)
         ancho_m   = L_m if rotado_m else A_m   # dimensión corta (offset carriles/pilares)
 
-        hbase_m  = calc_hbase(largo_m, ancho_m, base_m, panel_m)
+        aislado_m = _cf(fila_m, 'aislado').lower() == 'true'
+        hbase_m  = calc_hbase(largo_m, ancho_m, base_m, panel_m, aislado_m)
         hbase_d  = hbase_m if isinstance(hbase_m, int) else (140 if "140" in str(hbase_m) else 160)
         correas_m, tablero_m = calc_correas(largo_m, base_m, ancho_m, g_car_m)
         blk_pil_m = nombre_bloque_pilar(ancho_m, panel_m)
@@ -475,9 +476,10 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
     long_pilar0 = int(_cf(fila0,'h') or 2500) + 25
     panel0  = _cf(fila0, 'panelGrosor')
     g_car0  = grosor_carril(panel0)
+    aislado0 = _cf(fila0, 'aislado').lower() == 'true'
     hbase0  = calc_hbase(int(_cf(fila0,'l') or 6000),
                          int(_cf(fila0,'a') or 2350),
-                         _cf(fila0,'base'), panel0)
+                         _cf(fila0,'base'), panel0, aislado0)
     hbase0_d = hbase0 if isinstance(hbase0, int) else (140 if "140" in str(hbase0) else 160)
     tipo0   = _tipo_tablero(_cf(fila0,'base'))
 

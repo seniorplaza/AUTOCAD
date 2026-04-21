@@ -868,7 +868,7 @@
 // ═══ DATA UPDATE FUNCTIONS ══════════════════════════════════════════════════
         function kitVariant(item) {
             // Sin panel → E80 (solo estructura)
-            if (!item.panelGrosor || !parseInt(item.panelGrosor)) return 'E80';
+            if (!item.panelGrosor || !parseInt(item.panelGrosor) || item.conPanel === false) return 'E80';
             const l = parseInt(item.l) || 0;
             const grosor = parseInt(item.panelGrosor) || 40;
             // < 3000mm — panel va aparte, solo base+cubierta, siempre E80 P

@@ -299,7 +299,7 @@ def generar_adosado(filas_conj, adosamiento, ruta_plantilla, ruta_salida):
         hbase_m  = calc_hbase(largo_m, ancho_m, base_m, panel_m, aislado_m)
         hbase_d  = hbase_m if isinstance(hbase_m, int) else (140 if "140" in str(hbase_m) else 160)
         correas_m, tablero_m = calc_correas(largo_m, base_m, ancho_m, g_car_m)
-        blk_pil_m = nombre_bloque_pilar(ancho_m, panel_m if con_panel_m else "")
+        blk_pil_m = nombre_bloque_pilar(ancho_m, panel_m)
         # Correas para el alzado (siempre en el eje X del módulo = L_m)
         correas_alz = calc_correas(L_m, base_m, A_m, g_car_m)[0] if rotado_m else correas_m
 

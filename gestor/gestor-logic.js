@@ -621,6 +621,19 @@
             return oferta.replace(/^OF\s*/i, '').trim();
         }
 
+        // Función para generar el siguiente número de oferta único
+        function generateNextOferta() {
+            const existingNumbers = orders
+                .map(o => getOfertaNumero(o.oferta))
+                .filter(num => num && num !== '---/26' && /^\d+/.test(num))
+                .map(num => parseInt(num.match(/^\d+/)[0], 10))
+                .filter(num => !isNaN(num));
+            
+            const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 20000; // Default starting point
+            const nextNumber = maxNumber + 1;
+            return `OF ${nextNumber}/26`;
+        }
+
 
 // ═══ TOGGLE PRINTED/SENT/DELIVERED ══════════════════════════════════════════
         function togglePrinted(id) {
@@ -891,6 +904,10 @@
                 if (oldValue !== newValue) {
                     pushToHistory(); 
                     orders[index][key] = newValue;
+                    // Marcar como no nuevo si se edita un campo clave
+                    if (key === 'numPedido' || key === 'cliente' || key === 'oferta' || key === 'fecha' || key === 'destino') {
+                        orders[index].isNew = false;
+                    }
                     localStorage.setItem('fabricacion_orders', JSON.stringify(orders));
                     showSaveStatus(); 
                 }
@@ -1290,7 +1307,7 @@
             // Determinar el tipoRegistro según el modo actual
             const tipoReg = modoActual === 'ofertas' ? 1 : 0;
             const newOrder = { 
-                id: Date.now(), fecha: new Date().toLocaleDateString('es-ES'), oferta: "OF ---/26", numPedido: "", cliente: "NUEVO", destino: "-", serie: "-", l: "0", a: "0", h: "0", estBase: "", estCubierta: "", estPilar: "", panelGrosor: "", panelTipo: "", cantidad: 1, modulo: "M1", conjunto: false, conjuntoVinculado: false, adosamiento: null, cubierta: "", base: "", acabado: "", suministro: "", perfilado: "", colorPanel: "", colorEstructura: "", colorCarpinteria: "", extra: "", folderPath: "", printed: 0, sent: 0, delivered: 0, tipoRegistro: tipoReg, revision: 0, revHecha: {}, notasRev: {}, fechasRev: {}, favorite: false, folder: null, aislado: false, conPanel: true
+                id: Date.now(), fecha: new Date().toLocaleDateString('es-ES'), oferta: generateNextOferta(), numPedido: "", cliente: "NUEVO", destino: "-", serie: "-", l: "0", a: "0", h: "0", estBase: "", estCubierta: "", estPilar: "", panelGrosor: "", panelTipo: "", cantidad: 1, modulo: "M1", conjunto: false, conjuntoVinculado: false, adosamiento: null, cubierta: "", base: "", acabado: "", suministro: "", perfilado: "", colorPanel: "", colorEstructura: "", colorCarpinteria: "", extra: "", folderPath: "", printed: 0, sent: 0, delivered: 0, tipoRegistro: tipoReg, revision: 0, revHecha: {}, notasRev: {}, fechasRev: {}, favorite: false, folder: null, aislado: false, conPanel: true, isNew: true
             };
             pushToHistory(); orders.unshift(newOrder); saveList(false); renderTable();
-        }
+        }

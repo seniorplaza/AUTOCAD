@@ -249,6 +249,16 @@
             });
 
             data.sort((a, b) => {
+                // First, new orders at the top
+                if (a.isNew && !b.isNew) return -1;
+                if (!a.isNew && b.isNew) return 1;
+                
+                // Among new orders, latest first
+                if (a.isNew && b.isNew) {
+                    return b.id - a.id;
+                }
+                
+                // Then sort by current column
                 let valA = a[currentSort.key] || '';
                 let valB = b[currentSort.key] || '';
                 
@@ -263,8 +273,15 @@
                 else if (colConfig?.type === 'number-text') { valA = extractNumber(valA); valB = extractNumber(valB); }
                 else if (colConfig?.type === 'number') { valA = parseFloat(valA) || 0; valB = parseFloat(valB) || 0; }
                 else { valA = String(valA).toLowerCase(); valB = String(valB).toLowerCase(); }
+                
                 if (valA < valB) return currentSort.direction === 'asc' ? -1 : 1;
                 if (valA > valB) return currentSort.direction === 'asc' ? 1 : -1;
+                
+                // If equal, sort by group key to keep groups consecutive
+                const groupA = (a.numPedido || '') + '||' + (a.cliente || '');
+                const groupB = (b.numPedido || '') + '||' + (b.cliente || '');
+                if (groupA < groupB) return -1;
+                if (groupA > groupB) return 1;
                 return 0;
             });
 
@@ -280,7 +297,7 @@
                 const selectedClass = selectedRows.has(item.id) ? 'row-selected' : '';
                 // Agrupación visual: si el anterior tiene la misma oferta/numPedido, marcar como módulo agrupado
                 const prev = data[index - 1];
-                const isGrouped = prev && prev.oferta === item.oferta && prev.numPedido === item.numPedido && item.modulo && item.modulo !== 'M1';
+                const isGrouped = prev && prev.numPedido === item.numPedido && prev.cliente === item.cliente && item.modulo && item.modulo !== 'M1';
                 const groupedClass = isGrouped ? 'modulo-grouped' : '';
                 const row = document.createElement('tr');
                 row.className = `group relative transition-colors table-row ${item.favorite ? 'favorite-row' : ''} ${folderClass} ${selectedClass} ${groupedClass}`;
@@ -354,9 +371,9 @@
                 } else {
                     // MODO PEDIDOS: Todas las columnas
                     // Calcular grupo: cuántos módulos tiene este mismo pedido en los datos visibles
-                    const groupKey = (item.oferta || '') + '||' + (item.numPedido || '') + '||' + (item.cliente || '');
+                    const groupKey = (item.numPedido || '') + '||' + (item.cliente || '');
                     const groupItems = data.filter(d => 
-                        (d.oferta || '') + '||' + (d.numPedido || '') + '||' + (d.cliente || '') === groupKey
+                        (d.numPedido || '') + '||' + (d.cliente || '') === groupKey
                     );
                     const groupSize = groupItems.length;
                     const isFirstInGroup = groupItems[0].id === item.id;
@@ -867,4 +884,4 @@
             
             printWindow.document.write(printContent);
             printWindow.document.close();
-        }
+        }
